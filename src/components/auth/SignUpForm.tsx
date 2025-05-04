@@ -1,22 +1,77 @@
 "use client";
 import Checkbox from "@/components/form/input/Checkbox";
-import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
+import Input from "@/components/form/input/InputField";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
+import { User } from "lucide-react";
+import { Button } from "lebify-ui";
 import Link from "next/link";
 import React, { useState } from "react";
+import { register } from "@/lib/api/auth";
+import { useRouter } from "next/navigation";
 
 export default function SignUpForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
-  
-  // Add state for error messages
-  const [errors, setErrors] = useState({
-    username: "Username field is required.",
-    displayName: "Display name field is required.",
-    email: "Email field is required.",
-    password: "Password field is required.",
+  const [formData, setFormData] = useState({
+    username: "",
+    displayName: "",
+    email: "",
+    password: "",
   });
+
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<any>({});
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+    setLoading(true);
+
+    // Basic validation
+    const newErrors: any = {};
+    const passwordPattern = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!formData.username) newErrors.username = "Username is required";
+
+    if (!formData.displayName) newErrors.displayName = "Display Name is required";
+
+    if (!formData.email) {
+      newErrors.email = "Email is required";
+    } else if (!emailPattern.test(formData.email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+
+    if (!formData.password) {
+      newErrors.password = "Password is required";
+    } else if (!passwordPattern.test(formData.password)) {
+      newErrors.password = "Password must be at least 8 characters long, contain at least one uppercase letter and one digit.";
+    }
+
+    if (!isChecked) newErrors.checkbox = "You must agree to the terms conditions and privacy policy";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const data = await register(formData);
+      localStorage.setItem("token", data.token);
+      router.push("/auth/signin");
+    } catch (err) {
+      setErrors({ general: "Registration failed. Try again." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col flex-1 lg:w-1/2 w-full overflow-y-auto no-scrollbar py-12">
@@ -27,7 +82,7 @@ export default function SignUpForm() {
               Sign Up
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Enter your email and password to sign up!
+              Enter your data to sign up!
             </p>
           </div>
           <div>
@@ -62,72 +117,137 @@ export default function SignUpForm() {
             </div>
             <div className="relative py-3 sm:py-5">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200 dark:border-gray-800"></div>
+                <div className="w-full border-t border-gray-200 dark:border-stone-800"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="p-2 text-gray-400 bg-white dark:bg-gray-900 sm:px-5 sm:py-2">
+                <span className="p-2 text-gray-400 bg-gray-100 dark:bg-stone-900 sm:px-5 sm:py-2">
                   Or
                 </span>
               </div>
             </div>
-            <form>
+            <form onSubmit={handleSubmit}>
               <div className="space-y-5">
+                {errors.general && (
+                  <p className="my-10 text-sm text-center text-error-500">{errors.general}</p>
+                )}
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {/* <!-- UserName --> */}
                   <div className="sm:col-span-1">
                     <Label>
-                      Username{errors.username && (<span className="text-error-500">*</span>)}
+                      Username {errors.username && (<span className="text-error-500">*</span>)}
                     </Label>
                     <Input
-                      type="text"
                       id="uname"
-                      name="uname"
+                      name="username"
+                      type="text"
+                      value={formData.username}
                       placeholder="Enter your username"
+                      onChange={handleChange}
+                      className={!errors.username ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
                     />
                     {errors.username && (
-                      <p className="mt-1 text-sm text-error-500">{errors.username}</p>
+                      <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="w-4 h-4"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <p>{errors.username}</p>
+                      </div>
                     )}
                   </div>
+
                   {/* <!-- Display Name --> */}
                   <div className="sm:col-span-1">
                     <Label>
-                      Display Name{errors.displayName && (<span className="text-error-500">*</span>)}
+                      Display Name {errors.displayName && (<span className="text-error-500">*</span>)}
                     </Label>
                     <Input
                       type="text"
-                      id="dname"
-                      name="dname"
+                      id="displayName"
+                      name="displayName"
+                      value={formData.displaName}
+                      onChange={handleChange}
                       placeholder="Enter your display name"
+                      className={!errors.displayName ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
                     />
                     {errors.displayName && (
-                      <p className="mt-1 text-sm text-error-500">{errors.displayName}</p>
-                    )}
+                      <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="w-4 h-4"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <p>{errors.displayName}</p>
+                      </div>
+                      )}
                   </div>
                 </div>
+
                 {/* <!-- Email --> */}
                 <div>
                   <Label>
-                    Email{errors.email && (<span className="text-error-500">*</span>)}
+                    Email {errors.email && (<span className="text-error-500">*</span>)}
                   </Label>
                   <Input
-                    type="email"
+                    type="text"
                     id="email"
                     name="email"
+                    value={formData.email}
+                    onChange={handleChange}
                     placeholder="Enter your email"
+                    className={!errors.email ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
                   />
                   {errors.email && (
-                    <p className="mt-1 text-sm text-error-500">{errors.email}</p>
+                    <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="w-4 h-4"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <p>{errors.email}</p>
+                    </div>
                   )}
                 </div>
+
                 {/* <!-- Password --> */}
                 <div>
                   <Label>
-                    Password{errors.password && (<span className="text-error-500">*</span>)}
+                    Password {errors.password && (<span className="text-error-500">*</span>)}
                   </Label>
                   <div className="relative">
                     <Input
                       placeholder="Enter your password"
                       type={showPassword ? "text" : "password"}
+                      id="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      className={!errors.password ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
                     />
                     <span
                       onClick={() => setShowPassword(!showPassword)}
@@ -141,9 +261,25 @@ export default function SignUpForm() {
                     </span>
                   </div>
                   {errors.password && (
-                    <p className="mt-1 text-sm text-error-500">{errors.password}</p>
+                    <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="w-4 h-4"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <p>{errors.password}</p>
+                    </div>
                   )}
                 </div>
+
                 {/* <!-- Checkbox --> */}
                 <div className="flex items-center gap-3">
                   <Checkbox
@@ -151,42 +287,48 @@ export default function SignUpForm() {
                     checked={isChecked}
                     onChange={setIsChecked}
                   />
-                  <p className="inline-block font-normal text-gray-500 dark:text-gray-400">
+                  <p className="inline-block font-normal text-gray-500 dark:text-gray-400 text-sm md:text-base">
                     By creating an account means you agree to the{" "}
                     <span className="text-gray-800 dark:text-white/90">
-                      Terms and Conditions,
-                    </span>{" "}
+                      Terms and Conditions,{" "}
+                    </span>
                     and our{" "}
                     <span className="text-gray-800 dark:text-white">
                       Privacy Policy
                     </span>
                   </p>
                 </div>
+                  {errors.checkbox && (
+                      <div className="flex items-center gap-2 text-error-500 text-sm">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="w-4 h-4"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        <p>{errors.checkbox}</p>
+                      </div>
+                    )}
                 {/* <!-- Button --> */}
-                <div>
-                  <button 
-                    className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-white transition rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      // Example validation - you can customize this
-                      const newErrors = {
-                        username: "",
-                        displayName: "",
-                        email: "",
-                        password: ""
-                      };
-                      
-                      // Set example error messages
-                      newErrors.username = "Username must be at least 3 characters";
-                      newErrors.displayName = "Display name is required";
-                      newErrors.email = "Please enter a valid email address";
-                      newErrors.password = "Password must be at least 8 characters with one uppercase letter";
-                      
-                      setErrors(newErrors);
-                    }}
+                <div className="mt-1">
+                  <Button
+                    type="submit"
+                    variant="sea"
+                    loading={loading}
+                    loadingPosition="right"
+                    loadingSpinner="circle"
+                    hideTextWhenLoading
+                    className="flex items-center justify-center w-full"
                   >
                     Sign Up
-                  </button>
+                  </Button>
                 </div>
               </div>
             </form>
