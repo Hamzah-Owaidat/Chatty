@@ -27,35 +27,39 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-    setLoading(true);
-
-    // Basic validation
-    const newErrors: any = {};
-
-    if (!formData.username) newErrors.username = "Username is required";
-
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-    setErrors(newErrors);
-    setLoading(false);
-    return;
-    }
-
-    try {
-    const data = await login(formData);
-    localStorage.setItem("token", data.token);
-    router.push("/");
-    } catch (err) {
-    setErrors({ general: "Login failed. Try again." });
-    } finally {
-    setLoading(false);
-    }
+      e.preventDefault();
+      setErrors({});
+      setLoading(true);
+    
+      const newErrors: any = {};
+    
+      if (!formData.username) newErrors.username = "Username is required";
+      if (!formData.password) newErrors.password = "Password is required";
+    
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        setLoading(false);
+        return;
+      }
+    
+      try {
+        const data = await login(formData);
+    
+        if (!data.success) {
+          // Handle the structured API error
+          setErrors({ general: data.errors?.[0] || "Login failed. Try again." });
+        } else {
+          localStorage.setItem("token", data.token);
+          router.push("/");
+        }
+      } catch (err: any) {
+        const apiErrors = err?.response?.data?.errors;
+        setErrors({ general: apiErrors?.[0] || "Login failed. Try again." });
+      } finally {
+        setLoading(false);
+      }
     };
+    
 
     return (
     <div className="flex flex-col flex-1 lg:w-1/2 w-full">
@@ -104,7 +108,15 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
               <div className="space-y-6">
                 <div>
                   {errors.general && (
-                  <p className="mt-1 text-sm text-error-500 text-center">{errors.general}</p>
+                    <div className="flex items-center justify-center gap-2 text-error-500 text-sm py-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
+                        aria-hidden="true">
+                        <path fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                          clipRule="evenodd" />
+                      </svg>
+                      <p>{errors.general}</p>
+                    </div>
                   )}
                   {/* Username Field */}
                   <Label>
@@ -180,7 +192,7 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
                 <div className="mt-1">
                   <Button type="submit" variant="sea" loading={loading} loadingPosition="right" loadingSpinner="circle"
                     hideTextWhenLoading className="flex items-center justify-center w-full">
-                    Sign Up
+                    Sign In
                   </Button>
                 </div>
               </div>
