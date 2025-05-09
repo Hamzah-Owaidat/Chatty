@@ -94,10 +94,10 @@ const AppHeader: React.FC = () => {
               ].map((item, index) => (
                 <div
                   key={index}
-                  className="group relative bg-gradient-to-br from-[#1a7b9b] to-[#168199] text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:shadow-lg"
+                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:shadow-lg"
                 >
                   {item.icon}
-                  <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-black/70 group-hover:block -bottom-9">
+                  <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-[#1a7b9b]  group-hover:block -bottom-9">
                     {item.label}
                   </div>
                 </div>
@@ -134,10 +134,10 @@ const AppHeader: React.FC = () => {
               ].map((item, index) => (
                 <div
                   key={index}
-                  className="group relative bg-gradient-to-br from-[#1a7b9b] to-[#168199] text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:shadow-lg"
+                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center transition-colors"
                 >
                   {item.icon}
-                  <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-black/70 group-hover:block -bottom-9">
+                  <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-[#1a7b9b] group-hover:block -bottom-9">
                     {item.label}
                   </div>
                 </div>

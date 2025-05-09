@@ -24,7 +24,7 @@ export default function NotificationDropdown() {
   return (
     <div className="relative">
       <button
-        className="relative dropdown-toggle flex items-center justify-center text-white transition-colors bg-[#1a7b9b] rounded-full h-11 w-11 hover:bg-[#1a7b9b]/80"
+        className="relative dropdown-toggle flex items-center justify-center rounded-full h-11 w-11 bg-transparent hover:bg-[#1a7b9b] border border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white transition-colors"
         onClick={handleClick}
       >
         <span
@@ -52,7 +52,7 @@ export default function NotificationDropdown() {
       <Dropdown
         isOpen={isOpen}
         onClose={closeDropdown}
-        className="absolute -right-[240px] mt-[17px] flex h-[480px] w-[350px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark sm:w-[361px] lg:right-0"
+        className="absolute -right-[240px] mt-[17px] flex h-[480px] w-[350px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-stone-700 dark:bg-stone-950 sm:w-[361px] lg:right-0"
       >
         <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-gray-700">
           <h5 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
@@ -374,7 +374,7 @@ export default function NotificationDropdown() {
         </ul>
         <Link
           href="/"
-          className="block px-4 py-2 mt-3 text-sm font-medium text-center text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+          className="block px-4 py-2 mt-3 text-sm font-medium text-center text-white bg-[#1a7b9b] rounded-lg "
         >
           View All Notifications
         </Link>
