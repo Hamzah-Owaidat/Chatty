@@ -3,10 +3,8 @@ import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import UserDropdown from "@/components/header/UserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
-import Image from "next/image";
-import Link from "next/link";
 import React, { useState ,useEffect,useRef} from "react";
-import { Search, Settings, Plus, MessageCircle, Phone, Activity } from "lucide-react";
+import { MessageCircle, Phone, Activity } from "lucide-react";
 
 
 const AppHeader: React.FC = () => {
@@ -94,7 +92,7 @@ const AppHeader: React.FC = () => {
               ].map((item, index) => (
                 <div
                   key={index}
-                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:shadow-lg"
+                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-gray-300 text-stone-700 hover:text-white hover:border-none dark:text-white dark:border-stone-700 cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:shadow-lg"
                 >
                   {item.icon}
                   <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-[#1a7b9b]  group-hover:block -bottom-9">
@@ -130,11 +128,11 @@ const AppHeader: React.FC = () => {
               {[
                 { icon: <MessageCircle size={20} />, label: "Messages" },
                 { icon: <Phone size={20} />, label: "Calls" },
-                { icon: <Activity size={20} />, label: "Activity" },
+                { icon: <Activity size={20} />, label: "Statuses" },
               ].map((item, index) => (
                 <div
                   key={index}
-                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center transition-colors"
+                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-gray-300 dark:border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center transition-colors"
                 >
                   {item.icon}
                   <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-[#1a7b9b] group-hover:block -bottom-9">

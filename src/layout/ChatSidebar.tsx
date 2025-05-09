@@ -97,13 +97,13 @@ const ChatSidebar = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("messages");
 
-  const handleUserClick = (userId) => {
+  const handleUserClick = (userId: string) => {
     setSelectedUserId(userId);
     console.log("Start chat with:", userId);
   };
 
   const filteredUsers = fakeUsers.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase())
+    user?.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Animation effect for new messages
@@ -207,7 +207,7 @@ const ChatSidebar = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="py-6 flex justify-center items-center">
-        <Link href="/">
+        <Link href="/chat">
           {isExpanded || isHovered || isMobileOpen ? (
             <>
               <Image
