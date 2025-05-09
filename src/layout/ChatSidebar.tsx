@@ -269,7 +269,7 @@ const ChatSidebar = () => {
             onClick={() => setActiveTab("messages")}
             className={`flex-1 py-2 px-4 text-sm rounded-lg transition ${
               activeTab === "messages"
-                ? "bg-white dark:bg-stone-700 shadow-sm font-medium text-blue-500"
+                ? "bg-gray-100 dark:bg-stone-700 shadow-sm font-medium text-blue-500"
                 : "text-gray-500"
             }`}
           >
@@ -279,7 +279,7 @@ const ChatSidebar = () => {
             onClick={() => setActiveTab("unread")}
             className={`flex-1 py-2 px-4 text-sm rounded-lg transition ${
               activeTab === "unread"
-                ? "bg-white dark:bg-stone-700 shadow-sm font-medium text-blue-500"
+                ? "bg-gray-100 dark:bg-stone-700 shadow-sm font-medium text-blue-500"
                 : "text-gray-500"
             }`}
           >
@@ -297,7 +297,7 @@ const ChatSidebar = () => {
           </div>
         )}
         
-        <div className="flex justify-between items-center mb-2 sticky top-0 bg-white dark:bg-stone-900 py-2 z-10">
+        <div className="flex justify-between items-center mb-2 sticky top-0 bg-gray-100 dark:bg-stone-900 py-2 z-10">
           <h2 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
             {isExpanded || isHovered || isMobileOpen ? "Recent Chats" : ""}
           </h2>
