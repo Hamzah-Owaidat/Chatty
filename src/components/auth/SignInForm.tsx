@@ -2,7 +2,7 @@
 import Checkbox from "@/components/form/input/Checkbox";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
-import {Button} from "lebify-ui";
+import { Button } from "lebify-ui";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
 import React, { useState } from "react";
@@ -10,58 +10,58 @@ import { login } from "@/lib/api/auth";
 import { useRouter } from "next/navigation";
 
 export default function SignInForm() {
-const [showPassword, setShowPassword] = useState(false);
-const [isChecked, setIsChecked] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isChecked, setIsChecked] = useState(false);
 
-const [formData, setFormData] = useState({
-username: "",
-password: ""
-});
+  const [formData, setFormData] = useState({
+    username: "",
+    password: ""
+  });
 
-const [loading, setLoading] = useState(false);
-const [errors, setErrors] = useState<{ username?: string; password?: string; general?: string }>({});
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ username?: string; password?: string; general?: string }>({});
   const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+  };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setErrors({});
-      setLoading(true);
-    
-      const newErrors: any = {};
-    
-      if (!formData.username) newErrors.username = "Username is required";
-      if (!formData.password) newErrors.password = "Password is required";
-    
-      if (Object.keys(newErrors).length > 0) {
-        setErrors(newErrors);
-        setLoading(false);
-        return;
-      }
-    
-      try {
-        const data = await login(formData);
-    
-        if (!data.success) {
-          // Handle the structured API error
-          setErrors({ general: data.errors?.[0] || "Login failed. Try again." });
-        } else {
-          localStorage.setItem("token", data.token);
-          router.push("/");
-        }
-      } catch (err: any) {
-        const apiErrors = err?.response?.data?.errors;
-        setErrors({ general: apiErrors?.[0] || "Login failed. Try again." });
-      } finally {
-        setLoading(false);
-      }
-    };
-    
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+    setLoading(true);
 
-    return (
+    const newErrors: any = {};
+
+    if (!formData.username) newErrors.username = "Username is required";
+    if (!formData.password) newErrors.password = "Password is required";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const data = await login(formData);
+
+      if (!data.success) {
+        // Handle the structured API error
+        setErrors({ general: data.errors?.[0] || "Login failed. Try again." });
+      } else {
+        localStorage.setItem("token", data.token);
+        router.push("/");
+      }
+    } catch (err: any) {
+      const apiErrors = err?.response?.data?.errors;
+      setErrors({ general: apiErrors?.[0] || "Login failed. Try again." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  return (
     <div className="flex flex-col flex-1 lg:w-1/2 w-full">
       <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
         <div>
@@ -127,15 +127,15 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
                     border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`
                     } />
                   {errors.username && (
-                  <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
-                      aria-hidden="true">
-                      <path fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
-                        clipRule="evenodd" />
-                    </svg>
-                    <p>{errors.username}</p>
-                  </div>
+                    <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
+                        aria-hidden="true">
+                        <path fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                          clipRule="evenodd" />
+                      </svg>
+                      <p>{errors.username}</p>
+                    </div>
                   )}
                 </div>
 
@@ -147,30 +147,30 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
                     Password {errors.password && (<span className="text-error-500">*</span>)}
                   </Label>
                   <div className="relative">
-                    <Input placeholder="Enter your password" type={showPassword ? "text" : "password" } id="password"
+                    <Input placeholder="Enter your password" type={showPassword ? "text" : "password"} id="password"
                       name="password" value={formData.password} onChange={handleChange} className={!errors.password ?
-                      `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500
+                        `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500
                       dark:border-l-red-500` } />
-                    <span onClick={()=> setShowPassword(!showPassword)}
+                    <span onClick={() => setShowPassword(!showPassword)}
                       className="absolute z-30 -translate-y-1/2 cursor-pointer right-4 top-1/2"
-                      >
+                    >
                       {showPassword ? (
-                      <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
+                        <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
                       ) : (
-                      <EyeCloseIcon className="fill-gray-500 dark:fill-gray-400" />
+                        <EyeCloseIcon className="fill-gray-500 dark:fill-gray-400" />
                       )}
                     </span>
                   </div>
                   {errors.password && (
-                  <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
-                      aria-hidden="true">
-                      <path fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
-                        clipRule="evenodd" />
-                    </svg>
-                    <p>{errors.password}</p>
-                  </div>
+                    <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
+                        aria-hidden="true">
+                        <path fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                          clipRule="evenodd" />
+                      </svg>
+                      <p>{errors.password}</p>
+                    </div>
                   )}
                 </div>
 
@@ -183,7 +183,7 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
                   </div>
                   <Link href="/reset-password"
                     className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400">
-                  Forgot password?
+                    Forgot password?
                   </Link>
                 </div>
 
@@ -202,7 +202,7 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
               <p className="text-sm font-normal text-center text-gray-700 dark:text-gray-400 sm:text-start">
                 Don&apos;t have an account? {""}
                 <Link href="signup" className="text-brand-500 hover:text-brand-600 dark:text-brand-400">
-                Sign Up
+                  Sign Up
                 </Link>
               </p>
             </div>
@@ -210,5 +210,5 @@ const [errors, setErrors] = useState<{ username?: string; password?: string; gen
         </div>
       </div>
     </div>
-    );
-    }
+  );
+}

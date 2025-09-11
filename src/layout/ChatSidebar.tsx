@@ -91,7 +91,7 @@ const fakeUsers = [
   },
 ];
 
-const ChatSidebar = () => {
+const ChatSidebar = ({ onUserSelect }) => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -99,7 +99,7 @@ const ChatSidebar = () => {
 
   const handleUserClick = (userId: string) => {
     setSelectedUserId(userId);
-    console.log("Start chat with:", userId);
+    onUserSelect(userId); // notify parent
   };
 
   const filteredUsers = fakeUsers.filter(user =>

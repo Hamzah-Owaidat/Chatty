@@ -127,17 +127,17 @@ export default function SignUpForm() {
             </div>
             <form onSubmit={handleSubmit}>
               <div className="space-y-5">
-                  {errors.general && (
-                    <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
-                        aria-hidden="true">
-                        <path fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
-                          clipRule="evenodd" />
-                      </svg>
-                      <p>{errors.general}</p>
-                    </div>
-                  )}
+                {errors.general && (
+                  <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
+                      aria-hidden="true">
+                      <path fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                        clipRule="evenodd" />
+                    </svg>
+                    <p>{errors.general}</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {/* <!-- UserName --> */}
                   <div className="sm:col-span-1">
@@ -151,7 +151,7 @@ export default function SignUpForm() {
                       value={formData.username}
                       placeholder="Enter your username"
                       onChange={handleChange}
-                      className={!errors.username ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
+                      className={!errors.username ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`}
                     />
                     {errors.username && (
                       <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
@@ -185,7 +185,7 @@ export default function SignUpForm() {
                       value={formData.displaName}
                       onChange={handleChange}
                       placeholder="Enter your display name"
-                      className={!errors.displayName ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
+                      className={!errors.displayName ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`}
                     />
                     {errors.displayName && (
                       <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
@@ -204,7 +204,7 @@ export default function SignUpForm() {
                         </svg>
                         <p>{errors.displayName}</p>
                       </div>
-                      )}
+                    )}
                   </div>
                 </div>
 
@@ -220,7 +220,7 @@ export default function SignUpForm() {
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="Enter your email"
-                    className={!errors.email ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
+                    className={!errors.email ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`}
                   />
                   {errors.email && (
                     <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
@@ -255,7 +255,7 @@ export default function SignUpForm() {
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
-                      className={!errors.password ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500` }
+                      className={!errors.password ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`}
                     />
                     <span
                       onClick={() => setShowPassword(!showPassword)}
@@ -306,24 +306,24 @@ export default function SignUpForm() {
                     </span>
                   </p>
                 </div>
-                  {errors.checkbox && (
-                      <div className="flex items-center gap-2 text-error-500 text-sm">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="w-4 h-4"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <p>{errors.checkbox}</p>
-                      </div>
-                    )}
+                {errors.checkbox && (
+                  <div className="flex items-center gap-2 text-error-500 text-sm">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-4 h-4"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <p>{errors.checkbox}</p>
+                  </div>
+                )}
                 {/* <!-- Button --> */}
                 <div className="mt-1">
                   <Button

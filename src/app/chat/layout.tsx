@@ -2,16 +2,18 @@
 
 import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
-import AppSidebar from "@/layout/ChatSidebar";
+import ChatSidebar from "@/layout/ChatSidebar";
 import Backdrop from "@/layout/Backdrop";
-import React from "react";
+import React, { useState } from "react";
+import ChatWindow from "@/components/common/ChatWindow";
 
-export default function AdminLayout({
+export default function ChatLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
 
   // Dynamic class for main content margin based on sidebar state
   const mainContentMargin = isMobileOpen
@@ -23,7 +25,7 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen xl:flex">
       {/* Sidebar and Backdrop */}
-      <AppSidebar />
+      <ChatSidebar onUserSelect={setActiveUserId}/>
       <Backdrop />
       {/* Main Content Area */}
       <div
@@ -32,7 +34,15 @@ export default function AdminLayout({
         {/* Header */}
         <AppHeader />
         {/* Page Content */}
-        <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+        <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
+          {activeUserId ? (
+            <ChatWindow userId={activeUserId} />
+          ) : (
+            <div className="text-center text-gray-500 mt-20">
+              👋 Select a user to start chatting
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

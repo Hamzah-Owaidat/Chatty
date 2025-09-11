@@ -1,8 +1,6 @@
 import api from './client';
 import { LoginCredentials, RegisterData } from '@/types/auth';
 
-
-
 export async function login(creadentiels: LoginCredentials) {
     const response = await api.post('/auth/login', creadentiels);
     return response.data;
