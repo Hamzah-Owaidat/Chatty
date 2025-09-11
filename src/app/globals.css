@@ -717,24 +717,25 @@ span.flatpickr-weekday,
   @apply border-[6px] border-brand-500 bg-brand-500 dark:border-brand-500;
 }
 
-.taskCheckbox:checked ~ .box span {
-  @apply opacity-100 bg-brand-500;
-}
-.taskCheckbox:checked ~ p {
-  @apply text-gray-400 line-through;
-}
-.taskCheckbox:checked ~ .box {
-  @apply border-brand-500 bg-brand-500 dark:border-brand-500;
+.chat-scrollbar::-webkit-scrollbar {
+  width: 2px;
 }
 
-.task {
-  transition: all 0.2s ease; /* Smooth transition for visual effects */
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.task {
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.1),
-    0 1px 2px 0 rgba(16, 24, 40, 0.06);
-  opacity: 0.8;
-  cursor: grabbing; /* Changes the cursor to indicate dragging */
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #1a7b9b;
+  border-radius: 2px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #15657d;
+}
+
+/* For Firefox */
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #1a7b9b transparent;
 }

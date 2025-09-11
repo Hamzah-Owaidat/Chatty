@@ -11,7 +11,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-white text-black dark:bg-stone-950 dark:text-white">
+      <body className="bg-white text-black dark:bg-stone-950 dark:text-white max-h-screen">
         <ThemeProvider>
           <SidebarProvider>{children}</SidebarProvider>
         </ThemeProvider>

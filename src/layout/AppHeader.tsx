@@ -3,14 +3,17 @@ import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
 import UserDropdown from "@/components/header/UserDropdown";
 import { useSidebar } from "@/context/SidebarContext";
-import React, { useState ,useEffect,useRef} from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MessageCircle, Phone, Activity } from "lucide-react";
+import { useAppTab } from "@/context/AppTabContext";
 
 
 const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
+
+  const { activeTab, setActiveTab } = useAppTab();
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) {
@@ -126,13 +129,18 @@ const AppHeader: React.FC = () => {
           <div className="hidden lg:block">
             <div className="flex items-center gap-3">
               {[
-                { icon: <MessageCircle size={20} />, label: "Messages" },
-                { icon: <Phone size={20} />, label: "Calls" },
-                { icon: <Activity size={20} />, label: "Statuses" },
-              ].map((item, index) => (
+                { key: "messages", icon: <MessageCircle size={20} />, label: "Messages" },
+                { key: "calls", icon: <Phone size={20} />, label: "Calls" },
+                { key: "statuses", icon: <Activity size={20} />, label: "Statuses" },
+              ].map((item) => (
                 <div
-                  key={index}
-                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-gray-300 dark:border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center transition-colors"
+                  key={item.key}
+                  onClick={() => setActiveTab(item.key as any)}
+                  className={`group relative cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center 
+          ${activeTab === item.key
+                      ? "bg-[#1a7b9b] text-white"
+                      : "bg-transparent hover:bg-[#1a7b9b] border border-gray-300 dark:border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white transition-colors"
+                    }`}
                 >
                   {item.icon}
                   <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-[#1a7b9b] group-hover:block -bottom-9">
@@ -145,21 +153,20 @@ const AppHeader: React.FC = () => {
         </div>
 
         <div
-          className={`${
-            isApplicationMenuOpen ? "flex" : "hidden"
-          } items-center justify-between w-full gap-4 px-5 py-4 lg:flex shadow-theme-md lg:justify-end lg:px-0 lg:shadow-none`}
+          className={`${isApplicationMenuOpen ? "flex" : "hidden"
+            } items-center justify-between w-full gap-4 px-5 py-4 lg:flex shadow-theme-md lg:justify-end lg:px-0 lg:shadow-none`}
         >
           <div className="flex items-center gap-2 2xsm:gap-3">
             {/* <!-- Dark Mode Toggler --> */}
             <ThemeToggleButton />
             {/* <!-- Dark Mode Toggler --> */}
 
-           <NotificationDropdown /> 
+            <NotificationDropdown />
             {/* <!-- Notification Menu Area --> */}
           </div>
           {/* <!-- User Area --> */}
-          <UserDropdown /> 
-    
+          <UserDropdown />
+
         </div>
       </div>
     </header>

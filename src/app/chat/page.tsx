@@ -1,30 +1,21 @@
-import type { Metadata } from "next";
+// app/chat/page.tsx
+"use client"; // page needs to use hooks (useChat)
 import React from "react";
+import ChatWindow from "@/components/common/ChatWindow";
+import { useChat } from "@/context/ChatContext";
 
+export default function ChatPage() {
+  const { activeUserId } = useChat();
 
-export const metadata: Metadata = {
-  title:
-    "Next.js E-commerce Dashboard | TailAdmin - Next.js Dashboard Template",
-  description: "This is Next.js Home for TailAdmin Dashboard Template",
-};
-
-export default function Ecommerce() {
   return (
-    <div className="grid grid-cols-12 gap-4 md:gap-6">
-      <div className="col-span-12 space-y-6 xl:col-span-7">
-      </div>
-
-      <div className="col-span-12 xl:col-span-5">
-      </div>
-
-      <div className="col-span-12">
-      </div>
-
-      <div className="col-span-12 xl:col-span-5">
-      </div>
-
-      <div className="col-span-12 xl:col-span-7">
-      </div>
-    </div>
+    <>
+      {activeUserId ? (
+        <ChatWindow userId={activeUserId} />
+      ) : (
+        <div className="text-center text-gray-500 mt-20">
+          👋 Select a user to start chatting
+        </div>
+      )}
+    </>
   );
 }
