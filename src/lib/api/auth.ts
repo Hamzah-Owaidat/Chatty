@@ -1,5 +1,6 @@
+import { getSavedToken } from '@/utils/authToken';
 import api from './client';
-import { LoginCredentials, RegisterData } from '@/types/auth';
+import { LoginCredentials, RegisterData } from '@/types/auth/auth.models';
 
 export async function login(creadentiels: LoginCredentials) {
     const response = await api.post('/auth/login', creadentiels);
@@ -16,7 +17,17 @@ export async function logout(){
     return response.data;
 }
 
-export async function getCurrentUser(){
-    const response = await api.post('/auth/me');
-    return response.data;
+export async function getCurrentUser() {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  const response = await api.get(
+    '/auth/me',
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  return response.data;
 }
