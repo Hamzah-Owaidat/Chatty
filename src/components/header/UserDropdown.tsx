@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useAppSelector } from "@/store/hooks";
@@ -13,13 +13,43 @@ import LoadingSpinner from "../common/LoadingSpinner";
 export default function UserDropdown() {
 
   const [isOpen, setIsOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const logoutInProgress = useRef(false);
 
   const user = useAppSelector((state) => state.auth.user);
   const token = useAppSelector((state) => state.auth.token);
   const status = useAppSelector((state) => state.auth.status);
   const initialized = useAppSelector((state) => state.auth.initialized);
+
+  const handleLogout = useCallback(async () => {
+    // Prevent multiple simultaneous logout calls
+    if (logoutInProgress.current || isLoggingOut) return;
+
+    logoutInProgress.current = true;
+    setIsLoggingOut(true);
+    setIsOpen(false); // Close dropdown immediately
+
+    try {
+      await dispatch(logout()).unwrap();
+      // Only redirect after successful logout
+      router.replace("/auth/signin"); // Use replace instead of push
+    } catch (error) {
+      console.error("Logout failed:", error);
+      // Handle logout error if needed
+    } finally {
+      setIsLoggingOut(false);
+      logoutInProgress.current = false;
+    }
+  }, [dispatch, router, isLoggingOut]);
+
+  // Cleanup function to reset ref on unmount
+  useEffect(() => {
+    return () => {
+      logoutInProgress.current = false;
+    };
+  }, []);
 
   // Show loading while initializing or fetching user
   if (!initialized || (token && status === 'loading')) {
@@ -55,8 +85,6 @@ export default function UserDropdown() {
   function closeDropdown() {
     setIsOpen(false);
   }
-
-
 
   return (
     <div className="relative">
@@ -186,11 +214,8 @@ export default function UserDropdown() {
           </li>
         </ul>
         <button
-          onClick={async () => {
-            await dispatch(logout());
-            router.push("auth/signin"); // redirect after clearing auth
-            closeDropdown();
-          }}
+          onClick={handleLogout}
+          disabled={isLoggingOut || logoutInProgress.current}
           className="flex items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
         >
           <svg

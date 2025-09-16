@@ -28,7 +28,7 @@ export default function SignInForm() {
 
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { status, error } = useAppSelector((s) => s.auth);
+  const { status } = useAppSelector((s) => s.auth);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -54,7 +54,7 @@ export default function SignInForm() {
       showToast.success("Logged in successfully!");
       router.push("/chat");
     } catch (err) {
-      showToast.error(getErrorMessage(err.payload));
+      showToast.error(getErrorMessage(err));
     }
   };
 
@@ -72,12 +72,6 @@ export default function SignInForm() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* General error */}
-            {errors.general || error ? (
-              <div className="flex items-center justify-center gap-2 text-error-500 text-sm py-2">
-                <p>{errors.general || error}</p>
-              </div>
-            ) : null}
 
             {/* Username */}
             <div>

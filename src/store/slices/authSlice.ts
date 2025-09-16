@@ -3,7 +3,6 @@ import { setAuthToken, getSavedToken } from "@/utils/authToken";
 import {
   login as loginApi,
   register as registerApi,
-  logout as logoutApi,
   getCurrentUser,
 } from "@/lib/api/auth";
 import { LoginCredentials, RegisterData, LoginResponse, RegisterResponse } from "@/types/auth/auth.models";
@@ -102,11 +101,8 @@ export const fetchCurrentUser = createAsyncThunk<
 
 // Logout
 export const logout = createAsyncThunk("auth/logout", async () => {
-  try {
-    await logoutApi();
-  } finally {
-    setAuthToken(null);
-  }
+  // Just clear the token
+  setAuthToken(null);
 });
 
 const initialState: AuthState = {

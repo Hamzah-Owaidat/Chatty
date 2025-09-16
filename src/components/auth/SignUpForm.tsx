@@ -10,6 +10,7 @@ import { register } from "@/lib/api/auth";
 import { useRouter } from "next/navigation";
 import { RegisterData } from "@/types/auth/auth.models";
 import { getErrorMessage } from "@/utils/error";
+import { showToast } from "@/utils/toast";
 
 interface SignUpFormErrors {
   userName?: string;
@@ -44,7 +45,7 @@ export default function SignUpForm() {
     setLoading(true);
 
     // Basic validation
-    const newErrors: SignUpFormErrors  = {};
+    const newErrors: SignUpFormErrors = {};
     const passwordPattern = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -77,7 +78,7 @@ export default function SignUpForm() {
       localStorage.setItem("token", data.token);
       router.push("/auth/signin");
     } catch (err) {
-      setErrors({ general: getErrorMessage(err) });
+      showToast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -137,17 +138,7 @@ export default function SignUpForm() {
             </div>
             <form onSubmit={handleSubmit}>
               <div className="space-y-5">
-                {errors.general && (
-                  <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"
-                      aria-hidden="true">
-                      <path fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v3a1 1 0 11-2 0V7zm0 4a1 1 0 112 0v3a1 1 0 11-2 0v-3z"
-                        clipRule="evenodd" />
-                    </svg>
-                    <p>{errors.general}</p>
-                  </div>
-                )}
+                
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {/* <!-- UserName --> */}
                   <div className="sm:col-span-1">
