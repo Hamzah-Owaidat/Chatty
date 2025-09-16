@@ -5,78 +5,58 @@ import {
   register as registerApi,
   logout as logoutApi,
   getCurrentUser,
-} from "@/lib/api/auth"; 
-import {
-  LoginCredentials,
-  RegisterData,
-  LoginResponse,
-  RegisterResponse,
-} from "@/types/auth/auth.models";
+} from "@/lib/api/auth";
+import { LoginCredentials, RegisterData, LoginResponse, RegisterResponse } from "@/types/auth/auth.models";
 import { AuthState } from "@/types/auth/auth.state";
 import { User } from "@/types/user";
+import { getErrorMessage } from "@/utils/error";
 
 // Initialize auth on app start
 export const initializeAuth = createAsyncThunk<
-  { user: User; token: string } | { user: null; token: null },
+  { user: User | null; token: string | null },
   void,
   { rejectValue: string }
 >("auth/initialize", async (_, thunkAPI) => {
   const token = getSavedToken();
-  
-  if (!token) {
-    return { user: null, token: null };
-  }
+  if (!token) return { user: null, token: null };
 
   try {
-    // Set token for API request
     setAuthToken(token);
-    
-    // Fetch current user data
     const response = await getCurrentUser();
-    
-    console.log("User data fetched:", response);
-    
-    return { user: response, token };
-  } catch (error: any) {
-    console.error("Failed to fetch user data:", error);
-    
-    // If token is invalid, clear it
+    return { user: response.data, token };
+  } catch (err) {
     setAuthToken(null);
-    
-    return thunkAPI.rejectWithValue(
-      error?.response?.data?.message || error?.message || "Failed to authenticate"
-    );
+    const message = getErrorMessage(err);
+    return thunkAPI.rejectWithValue(message);
   }
 });
 
 // Login user
 export const loginUser = createAsyncThunk<
-  { user?: User; token: string },
+  { user: User; token: string },
   LoginCredentials,
   { rejectValue: string }
 >("auth/login", async (credentials, thunkAPI) => {
   try {
     const res: LoginResponse = await loginApi(credentials);
-    if (!res.success) {
-      return thunkAPI.rejectWithValue(res.errors?.[0] || "Login failed");
-    }
-    const token = res.token;
+
+    if (!res.isSuccess || !res.data)
+      return thunkAPI.rejectWithValue(res.error || "Login failed");
+
+    const token = res.data; // ✅ res.data is the token string
     setAuthToken(token);
-    
-    // After login, fetch current user data
-    try {
-      const userResponse = await getCurrentUser();
-      return { user: userResponse, token };
-    } catch {
-      // If fetching user fails, still return the token
-      return { user: undefined, token };
-    }
-  } catch (err: any) {
-    const message =
-      err?.response?.data?.errors?.[0] ?? err?.message ?? "Login failed";
-    return thunkAPI.rejectWithValue(message);
+
+    // Fetch the user after setting the token
+    const userRes = await getCurrentUser(); 
+    if (!userRes.data) return thunkAPI.rejectWithValue("Failed to fetch user");
+
+    return { user: userRes.data, token };
+  } catch (err) {
+    return thunkAPI.rejectWithValue(getErrorMessage(err));
   }
 });
+
+
 
 // Register user
 export const registerUser = createAsyncThunk<
@@ -86,28 +66,25 @@ export const registerUser = createAsyncThunk<
 >("auth/register", async (data, thunkAPI) => {
   try {
     const res: RegisterResponse = await registerApi(data);
-    if (!res.success) {
-      return thunkAPI.rejectWithValue(res.errors?.[0] || "Registration failed");
-    }
-    const token = res.token;
+
+    if (!res.isSuccess) return thunkAPI.rejectWithValue(res.error || "Registration failed");
+
+    const token = res.data ?? "";
     setAuthToken(token);
-    
-    // After registration, fetch current user data
+
     try {
       const userResponse = await getCurrentUser();
-      return { user: userResponse, token };
+      return { user: userResponse.data, token };
     } catch {
-      // If fetching user fails, still return the token
       return { user: undefined, token };
     }
-  } catch (err: any) {
-    const message =
-      err?.response?.data?.errors?.[0] ?? err?.message ?? "Registration failed";
+  } catch (err) {
+    const message = getErrorMessage(err);
     return thunkAPI.rejectWithValue(message);
   }
 });
 
-// Fetch current user (can be called independently)
+// Fetch current user
 export const fetchCurrentUser = createAsyncThunk<
   { user: User },
   void,
@@ -115,14 +92,11 @@ export const fetchCurrentUser = createAsyncThunk<
 >("auth/me", async (_, thunkAPI) => {
   try {
     const res = await getCurrentUser();
-    console.log("heloooooooooo");
-    console.log("Fetched user:", res.user);
-    return { user: res };
-  } catch (err: any) {
-    console.error("Fetch user error:", err);
-    // If fetching current user fails, clear the invalid token
+    return { user: res.data };
+  } catch (err) {
     setAuthToken(null);
-    return thunkAPI.rejectWithValue(err?.message ?? "Failed to load user");
+    const message = getErrorMessage(err);
+    return thunkAPI.rejectWithValue(message);
   }
 });
 
@@ -130,8 +104,6 @@ export const fetchCurrentUser = createAsyncThunk<
 export const logout = createAsyncThunk("auth/logout", async () => {
   try {
     await logoutApi();
-  } catch {
-    // ignore API error
   } finally {
     setAuthToken(null);
   }
@@ -142,24 +114,19 @@ const initialState: AuthState = {
   token: getSavedToken(),
   status: "idle",
   error: null,
-  initialized: false, // Add this to track if auth has been initialized
+  initialized: false,
 };
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    setCredentials(
-      state,
-      action: PayloadAction<{ user?: User; token?: string }>
-    ) {
+    setCredentials(state, action: PayloadAction<{ user?: User; token?: string }>) {
       if (action.payload.token) {
         state.token = action.payload.token;
         setAuthToken(action.payload.token);
       }
-      if (action.payload.user) {
-        state.user = action.payload.user;
-      }
+      if (action.payload.user) state.user = action.payload.user;
     },
     clearAuth(state) {
       state.user = null;
@@ -170,11 +137,8 @@ const authSlice = createSlice({
   },
   extraReducers(builder) {
     builder
-      // Initialize auth
-      .addCase(initializeAuth.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
+      // Initialize
+      .addCase(initializeAuth.pending, (state) => { state.status = "loading"; state.error = null; })
       .addCase(initializeAuth.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.initialized = true;
@@ -191,10 +155,7 @@ const authSlice = createSlice({
       })
       
       // Login
-      .addCase(loginUser.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
+      .addCase(loginUser.pending, (state) => { state.status = "loading"; state.error = null; })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.user = action.payload.user ?? null;
@@ -208,10 +169,7 @@ const authSlice = createSlice({
       })
       
       // Register
-      .addCase(registerUser.pending, (state) => {
-        state.status = "loading";
-        state.error = null;
-      })
+      .addCase(registerUser.pending, (state) => { state.status = "loading"; state.error = null; })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.user = action.payload.user ?? null;
@@ -224,9 +182,7 @@ const authSlice = createSlice({
       })
       
       // Fetch current user
-      .addCase(fetchCurrentUser.pending, (state) => {
-        state.status = "loading";
-      })
+      .addCase(fetchCurrentUser.pending, (state) => { state.status = "loading"; })
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
         state.status = "succeeded";
         state.user = action.payload.user;
@@ -236,7 +192,7 @@ const authSlice = createSlice({
         state.status = "failed";
         state.user = null;
         state.token = null;
-        state.error = action.payload || "Failed to fetch user";
+        state.error = action.payload ?? "Failed to fetch user";
       })
       
       // Logout

@@ -2,9 +2,13 @@ import { getSavedToken } from '@/utils/authToken';
 import api from './client';
 import { LoginCredentials, RegisterData } from '@/types/auth/auth.models';
 
-export async function login(creadentiels: LoginCredentials) {
-    const response = await api.post('/auth/login', creadentiels);
-    return response.data;
+export async function login(credentials: LoginCredentials) {
+  try {
+    const response = await api.post('/auth/login', credentials);
+    return response.data; // success
+  } catch (err: any) {
+    throw err;
+  }
 }
 
 export async function register(data: RegisterData) {

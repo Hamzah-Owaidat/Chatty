@@ -10,12 +10,21 @@ import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loginUser } from "@/store/slices/authSlice";
 import { unwrapResult } from "@reduxjs/toolkit";
+import { getErrorMessage } from "@/utils/error";
+import { LoginCredentials } from "@/types/auth/auth.models";
+import { showToast } from "@/utils/toast";
+
+interface SignInFormErrors {
+  userName?: string;
+  password?: string;
+  general?: string;
+}
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
-  const [formData, setFormData] = useState({ username: "", password: "" });
-  const [errors, setErrors] = useState<{ username?: string; password?: string; general?: string }>({});
+  const [formData, setFormData] = useState({ userName: "", password: "" });
+  const [errors, setErrors] = useState<SignInFormErrors>({});
 
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -29,8 +38,8 @@ export default function SignInForm() {
     e.preventDefault();
     setErrors({});
 
-    const newErrors: any = {};
-    if (!formData.username) newErrors.username = "Username is required";
+    const newErrors: SignInFormErrors = {};
+    if (!formData.userName) newErrors.userName = "Username is required";
     if (!formData.password) newErrors.password = "Password is required";
 
     if (Object.keys(newErrors).length > 0) {
@@ -39,12 +48,13 @@ export default function SignInForm() {
     }
 
     try {
-      const action = await dispatch(loginUser(formData));
+      const action = await dispatch(loginUser(formData as LoginCredentials));
       const result = unwrapResult(action);
-      console.log("Logged in user:", result.user);
+      console.log("Logged in user:", result?.user);
+      showToast.success("Logged in successfully!");
       router.push("/chat");
-    } catch (err: any) {
-      setErrors({ general: err?.message || "Login failed" });
+    } catch (err) {
+      showToast.error(getErrorMessage(err.payload));
     }
   };
 
@@ -72,20 +82,20 @@ export default function SignInForm() {
             {/* Username */}
             <div>
               <Label>
-                Username {errors.username && <span className="text-error-500">*</span>}
+                Username {errors.userName && <span className="text-error-500">*</span>}
               </Label>
               <Input
-                id="username"
-                name="username"
+                id="userName"
+                name="userName"
                 type="text"
-                value={formData.username}
+                value={formData.userName}
                 placeholder="Enter your username"
                 onChange={handleChange}
-                className={!errors.username
+                className={!errors.userName
                   ? `border-l-3 border-l-green-700 dark:border-l-green-500`
                   : `border-l-3 border-l-red-500 dark:border-l-red-500`}
               />
-              {errors.username && <p className="text-error-500 text-sm pt-2">{errors.username}</p>}
+              {errors.userName && <p className="text-error-500 text-sm pt-2">{errors.userName}</p>}
             </div>
 
             {/* Password */}

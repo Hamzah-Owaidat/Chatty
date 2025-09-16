@@ -1,27 +1,26 @@
-import { User } from "../user";
-
+// Login credentials
 export interface LoginCredentials {
-  username: string;
+  userName: string;
   password: string;
 }
 
+// Registration data
 export interface RegisterData {
-  username: string;
+  userName: string;
   displayName: string;
   email: string;
   password: string;
 }
 
-export interface LoginResponse {
-  success: boolean;
-  token: string;
-  user?: User;
-  errors?: string[];
+// Base API response
+export interface ApiResponse<T> {
+  isSuccess: boolean;
+  statusCode: number;
+  error: string | null;
+  data: T;
 }
 
-export interface RegisterResponse {
-  success: boolean;
-  token: string;
-  user?: User;
-  errors?: string[];
-}
+export type LoginResponse = ApiResponse<string | null>;
+
+// Register response (data = Token only)
+export type RegisterResponse = ApiResponse<string | null>;

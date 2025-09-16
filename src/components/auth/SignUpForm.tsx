@@ -2,27 +2,37 @@
 import Checkbox from "@/components/form/input/Checkbox";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
-import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
-import { User } from "lucide-react";
+import { EyeCloseIcon, EyeIcon } from "@/icons";
 import { Button } from "lebify-ui";
 import Link from "next/link";
 import React, { useState } from "react";
 import { register } from "@/lib/api/auth";
 import { useRouter } from "next/navigation";
+import { RegisterData } from "@/types/auth/auth.models";
+import { getErrorMessage } from "@/utils/error";
+
+interface SignUpFormErrors {
+  userName?: string;
+  displayName?: string;
+  email?: string;
+  password?: string;
+  checkbox?: string;
+  general?: string;
+}
 
 export default function SignUpForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
   const [formData, setFormData] = useState({
-    username: "",
+    userName: "",
     displayName: "",
     email: "",
     password: "",
   });
 
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<any>({});
+  const [errors, setErrors] = useState<SignUpFormErrors>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -34,11 +44,11 @@ export default function SignUpForm() {
     setLoading(true);
 
     // Basic validation
-    const newErrors: any = {};
+    const newErrors: SignUpFormErrors  = {};
     const passwordPattern = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!formData.username) newErrors.username = "Username is required";
+    if (!formData.userName) newErrors.userName = "Username is required";
 
     if (!formData.displayName) newErrors.displayName = "Display Name is required";
 
@@ -63,11 +73,11 @@ export default function SignUpForm() {
     }
 
     try {
-      const data = await register(formData);
+      const data = await register(formData as RegisterData);
       localStorage.setItem("token", data.token);
       router.push("/auth/signin");
     } catch (err) {
-      setErrors({ general: "Registration failed. Try again." });
+      setErrors({ general: getErrorMessage(err) });
     } finally {
       setLoading(false);
     }
@@ -142,18 +152,18 @@ export default function SignUpForm() {
                   {/* <!-- UserName --> */}
                   <div className="sm:col-span-1">
                     <Label>
-                      Username {errors.username && (<span className="text-error-500">*</span>)}
+                      Username {errors.userName && (<span className="text-error-500">*</span>)}
                     </Label>
                     <Input
                       id="uname"
-                      name="username"
+                      name="userName"
                       type="text"
-                      value={formData.username}
+                      value={formData.userName}
                       placeholder="Enter your username"
                       onChange={handleChange}
-                      className={!errors.username ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`}
+                      className={!errors.userName ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`}
                     />
-                    {errors.username && (
+                    {errors.userName && (
                       <div className="flex items-center gap-2 text-error-500 text-sm pt-2">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -168,7 +178,7 @@ export default function SignUpForm() {
                             clipRule="evenodd"
                           />
                         </svg>
-                        <p>{errors.username}</p>
+                        <p>{errors.userName}</p>
                       </div>
                     )}
                   </div>
@@ -182,7 +192,7 @@ export default function SignUpForm() {
                       type="text"
                       id="displayName"
                       name="displayName"
-                      value={formData.displaName}
+                      value={formData.displayName}
                       onChange={handleChange}
                       placeholder="Enter your display name"
                       className={!errors.displayName ? `border-l-3 border-l-green-700 dark:border-l-green-500` : `border-l-3 border-l-red-500 dark:border-l-red-500`}
