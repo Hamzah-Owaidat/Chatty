@@ -3,7 +3,11 @@
 import React from "react";
 import { useTheme } from "@/context/ThemeContext";
 
-const ThemeResponsiveLogo: React.FC = () => {
+interface Props {
+  className?: string;
+}
+
+const ThemeResponsiveLogo: React.FC<Props> = ({className}) => {
   const { theme } = useTheme();
   
   return (
@@ -12,6 +16,7 @@ const ThemeResponsiveLogo: React.FC = () => {
       data-name="Layer 1" 
       xmlns="http://www.w3.org/2000/svg" 
       viewBox="0 0 1100 700"
+      className={className}
     >
       <defs>
         <style>

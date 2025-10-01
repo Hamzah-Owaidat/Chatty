@@ -1,6 +1,6 @@
 import GridShape from "@/components/common/GridShape";
 import ThemeTogglerTwo from "@/components/common/ThemeTogglerTwo";
-import ThemeResponsiveLogo from "@/components/common/ThemeResponsiveLogo ";
+import ThemeResponsiveLogo from "@/components/common/ThemeResponsiveLogo";
 import { ThemeProvider } from "@/context/ThemeContext";
 import React from "react";
 
