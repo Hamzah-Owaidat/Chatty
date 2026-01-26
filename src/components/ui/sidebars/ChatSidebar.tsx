@@ -4,107 +4,123 @@ import Image from "next/image";
 import { useSidebar } from "../../../context/SidebarContext";
 import { Search, Plus } from "lucide-react";
 import { useChat } from "@/context/ChatContext";
+import { getUserChats } from "@/lib/api/chat";
+import { UserChat } from "@/types/chat/chat.models";
+import { getErrorMessage } from "@/utils/error";
+import { showToast } from "@/utils/toast";
+import { useAppSelector } from "@/store/hooks";
 
-// Enhanced fake user data with online status, unread counts and last message
-const fakeUsers = [
-  {
-    id: "u1",
-    name: "Alice Johnson",
-    avatar: "/images/user/user-01.jpg",
-    status: "online",
-    lastMessage: "Hey, are you available for a call?",
-    lastTime: "2m ago",
-    unread: 3,
-  },
-  {
-    id: "u2",
-    name: "Bob Smith",
-    avatar: "/images/user/user-02.jpg",
-    status: "online",
-    lastMessage: "I've sent you the latest designs",
-    lastTime: "10m ago",
-    unread: 1,
-  },
-  {
-    id: "u3",
-    name: "Charlie Brown",
-    avatar: "/images/user/user-03.jpg",
-    status: "offline",
-    lastMessage: "Thanks for your help yesterday!",
-    lastTime: "2d ago",
-    unread: 0,
-  },
-  {
-    id: "u4",
-    name: "Dana White",
-    avatar: "/images/user/user-04.jpg",
-    status: "away",
-    lastMessage: "Let's schedule that meeting",
-    lastTime: "4h ago",
-    unread: 0,
-  },
-  ,
-  {
-    id: "u5",
-    name: "Dana White",
-    avatar: "/images/user/user-04.jpg",
-    status: "online",
-    lastMessage: "Let's schedule that meeting",
-    lastTime: "4h ago",
-    unread: 0,
-  },
-  {
-    id: "u6",
-    name: "Dana White",
-    avatar: "/images/user/user-04.jpg",
-    status: "away",
-    lastMessage: "Let's schedule that meeting",
-    lastTime: "4h ago",
-    unread: 0,
-  },
-  {
-    id: "u7",
-    name: "Dana White",
-    avatar: "/images/user/user-04.jpg",
-    status: "away",
-    lastMessage: "Let's schedule that meeting",
-    lastTime: "4h ago",
-    unread: 0,
-  },
-  {
-    id: "u8",
-    name: "Dana White",
-    avatar: "/images/user/user-04.jpg",
-    status: "online",
-    lastMessage: "Let's schedule that meeting",
-    lastTime: "4h ago",
-    unread: 0,
-  },
-  {
-    id: "u9",
-    name: "Dana White",
-    avatar: "/images/user/user-04.jpg",
-    status: "offline",
-    lastMessage: "Let's schedule that meeting",
-    lastTime: "4h ago",
-    unread: 0,
-  },
-];
+interface ChatUserDisplay {
+  id: string;
+  name: string;
+  avatar: string;
+  status: "online" | "offline" | "away";
+  lastMessage: string;
+  lastTime: string;
+  unread: number;
+}
 
 const ChatSidebar = () => {
   const { isExpanded, isMobileOpen, isHovered } = useSidebar();
-  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("messages");
-  const { setActiveUserId } = useChat(); 
+  const [chats, setChats] = useState<ChatUserDisplay[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { setActiveUserId } = useChat();
+  const currentUser = useAppSelector((state) => state.auth.user);
+
+  // Helper function to format time (e.g., "2m ago", "10m ago", "2d ago")
+  const formatTime = (timestamp?: string): string => {
+    if (!timestamp) return "";
+    
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+      
+      if (diffInSeconds < 60) return "just now";
+      if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+      if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+      if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+      
+      return date.toLocaleDateString();
+    } catch {
+      return timestamp;
+    }
+  };
+
+  // Fetch user chats from API
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        setLoading(true);
+        const userChats = await getUserChats();
+        
+        // Ensure userChats is an array
+        if (!Array.isArray(userChats)) {
+          console.error("API did not return an array:", userChats);
+          setChats([]);
+          return;
+        }
+        
+        // Transform API response to match component's expected format
+        const transformedChats: ChatUserDisplay[] = userChats.map((chat: UserChat) => {
+          let name: string;
+          let avatar: string = chat.image || "/images/user/user-01.jpg";
+          
+          if (chat.isGroupChat) {
+            // Group chat: use group name
+            name = chat.groupName || `Group ${chat.id.slice(-6)}`;
+          } else {
+            // Direct chat: try to get participant info
+            // Note: The backend currently doesn't include participant user information in the response.
+            // The participantsIds array only contains timestamps, not user IDs or user details.
+            // TODO: Backend should include participant user info (userName, displayName, image) in the response.
+            
+            // If the backend provides user info in the response, use it
+            if (chat.displayName || chat.userName) {
+              name = chat.displayName || chat.userName || "Unknown User";
+              avatar = chat.image || "/images/user/user-01.jpg";
+            } else {
+              // Fallback: show "Direct Chat" until backend provides participant info
+              name = "Direct Chat";
+            }
+          }
+          
+          return {
+            id: chat.id,
+            name: name,
+            avatar: avatar,
+            status: chat.status || "offline",
+            lastMessage: chat.lastMessage || "",
+            lastTime: chat.lastMessageAt && chat.lastMessageAt !== "0001-01-01T00:00:00Z" 
+              ? formatTime(chat.lastMessageAt) 
+              : formatTime(chat.createdAt),
+            unread: chat.unreadCount || 0,
+          };
+        });
+        
+        setChats(transformedChats);
+      } catch (err) {
+        console.error("Error fetching chats:", err);
+        showToast.error(getErrorMessage(err));
+        setChats([]); // Set empty array on error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChats();
+  }, []); 
 
   const handleUserClick = (userId: string) => {
     setSelectedUserId(userId);
     setActiveUserId(userId); // notify parent
   };
 
-  const filteredUsers = fakeUsers.filter(user =>
-    user?.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = chats.filter(user =>
+    user?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Animation effect for new messages
@@ -122,7 +138,7 @@ const ChatSidebar = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const renderUserItem = (user) => (
+  const renderUserItem = (user: ChatUserDisplay) => (
     <li key={user.id} className="mb-2">
       <button
         onClick={() => handleUserClick(user.id)}
@@ -253,7 +269,17 @@ const ChatSidebar = () => {
         </div>
 
         <ul className="flex flex-col pb-4">
-          {filteredUsers.map(renderUserItem)}
+          {loading ? (
+            <li className="text-center text-gray-500 dark:text-gray-400 py-8">
+              Loading chats...
+            </li>
+          ) : filteredUsers.length === 0 ? (
+            <li className="text-center text-gray-500 dark:text-gray-400 py-8">
+              No chats found
+            </li>
+          ) : (
+            filteredUsers.map(renderUserItem)
+          )}
         </ul>
       </div>
     </>
