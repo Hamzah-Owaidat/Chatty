@@ -4,7 +4,7 @@ import { Send, Paperclip, Mic, Image, FileText, Camera, Check, CheckCheck, Phone
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useSignalR } from "@/hooks/useSignalR";
-import { getMessages, sendMessage } from "@/lib/api/message";
+import { getMessages } from "@/lib/api/message";
 import { ChatMessage } from "@/types/chat/chat.models";
 import { useAppSelector } from "@/store/hooks";
 import { getErrorMessage } from "@/utils/error";
@@ -119,51 +119,14 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     addMessage(tempMessage);
 
     try {
-      console.log('🌐 Calling API to send message...');
-      // Send via API (which will also trigger SignalR)
-      // Include senderId from current user
-      const sentMessageResponse = await sendMessage(chatId, messageContent, currentUser?.id);
-      // Log only important fields (ignore null sender/chat objects)
-      console.log('✅ API response received:', {
-        id: sentMessageResponse.id,
-        content: sentMessageResponse.content,
-        chatId: sentMessageResponse.chatId,
-        senderId: sentMessageResponse.senderId,
-        sentAt: sentMessageResponse.sentAt,
-        hasSender: !!sentMessageResponse.sender,
-        hasChat: !!sentMessageResponse.chat
-      });
-      
-      // Transform the response to match our format
-      const sentMessage: ChatMessage = {
-        id: String(sentMessageResponse.id || ''),
-        content: ensureStringContent(sentMessageResponse.content),
-        senderId: String(sentMessageResponse.senderId || sentMessageResponse.sender?.id || currentUser?.id || ""),
-        chatId: String(sentMessageResponse.chatId || sentMessageResponse.chat?.id || chatId),
-        sentAt: sentMessageResponse.sentAt || sentMessageResponse.createdAt || sentMessageResponse.timestamp,
-        timestamp: sentMessageResponse.sentAt || sentMessageResponse.createdAt || sentMessageResponse.timestamp,
-        status: sentMessageResponse.status || "sent",
-        sender: sentMessageResponse.sender || undefined, // Convert null to undefined for cleaner logs
-        chat: sentMessageResponse.chat || undefined,
-      };
-      
-      console.log('🔄 Replacing temp message with real message:', {
-        id: sentMessage.id,
-        content: sentMessage.content,
-        chatId: sentMessage.chatId,
-        senderId: sentMessage.senderId
-      });
-      // Replace temp message with real one
-      setMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== tempMessage.id);
-        console.log(`📊 Messages after replacement: ${filtered.length} existing + 1 new = ${filtered.length + 1} total`);
-        return [...filtered, sentMessage];
-      });
-      
-      console.log('✅ Message sent successfully via API. Waiting for SignalR broadcast from backend...');
-      console.log('💡 Note: The backend should broadcast this message via SignalR to all clients in the chat group.');
+      console.log('📡 Calling SignalR hub SendMessage...');
+      // Send via SignalR hub (which will save + broadcast to all clients)
+      await sendSignalRMessage(messageContent, currentUser?.id);
+      console.log(
+        '✅ Message sent successfully via SignalR hub; waiting for broadcast to update UI.'
+      );
     } catch (err) {
-      console.error("❌ Error sending message:", err);
+      console.error('❌ Error sending message via SignalR hub:', err);
       showToast.error(getErrorMessage(err));
       // Remove failed message
       setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));

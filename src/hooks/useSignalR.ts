@@ -52,7 +52,9 @@ export const useSignalR = (chatId: string | null) => {
           };
           
           // Set up message handler - use ref to get current chatId
-          conn.on('ReceiveMessage', (message: any) => {
+          // Backend broadcasts with ChatHubMethods.MessageReceived = "MessageReceived"
+          // so we must listen to that exact event name here.
+          conn.on('MessageReceived', (message: any) => {
             const currentChatId = chatIdRef.current;
             console.log('📨 Received message via SignalR:', {
               message,
@@ -84,13 +86,30 @@ export const useSignalR = (chatId: string | null) => {
               
               console.log('✅ Adding message to state:', transformedMessage);
               setMessages((prev) => {
-                // Avoid duplicates
+                // 1) If we already have this final message id, ignore
                 if (prev.some((m) => m.id === transformedMessage.id)) {
-                  console.log('⚠️ Duplicate message ignored:', transformedMessage.id);
+                  console.log('⚠️ Duplicate message ignored (same id):', transformedMessage.id);
                   return prev;
                 }
-                console.log(`📝 Message added. Total messages: ${prev.length + 1}`);
-                return [...prev, transformedMessage];
+
+                // 2) Remove any optimistic temp messages for same chat/sender/content
+                const filtered = prev.filter((m) => {
+                  const isTemp = typeof m.id === 'string' && m.id.startsWith('temp-');
+                  const sameChat = m.chatId === transformedMessage.chatId;
+                  const sameSender = m.senderId === transformedMessage.senderId;
+                  const sameContent =
+                    ensureStringContent(m.content) === ensureStringContent(transformedMessage.content);
+
+                  if (isTemp && sameChat && sameSender && sameContent) {
+                    console.log('🧹 Removing matching temp message:', m);
+                    return false;
+                  }
+
+                  return true;
+                });
+
+                console.log(`📝 Message added. Total messages: ${filtered.length + 1}`);
+                return [...filtered, transformedMessage];
               });
             } else {
               console.log('⚠️ Message filtered out:', {
@@ -148,7 +167,7 @@ export const useSignalR = (chatId: string | null) => {
       isMounted = false;
       if (currentConnection) {
         // Remove handlers before stopping
-        currentConnection.off('ReceiveMessage');
+        currentConnection.off('MessageReceived');
         currentConnection.off('reconnecting');
         currentConnection.off('reconnected');
         currentConnection.off('close');
@@ -193,18 +212,37 @@ export const useSignalR = (chatId: string | null) => {
     };
   }, [connection, chatId, isConnected]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!connection || !chatId || !isConnected) {
-      throw new Error('Not connected to chat');
-    }
+  // Send a message via SignalR Hub (ChatHub.SendMessage)
+  // Backend signature: Task<Message> SendMessage(string chatId, Message message)
+  const sendMessage = useCallback(
+    async (content: string, senderId?: string) => {
+      if (!connection || !chatId || !isConnected) {
+        throw new Error('Not connected to chat');
+      }
 
-    try {
-      await connection.invoke('SendMessage', chatId, content);
-    } catch (err) {
-      console.error('Error sending message:', err);
-      throw err;
-    }
-  }, [connection, chatId, isConnected]);
+      try {
+        // Match backend Message model (PascalCase properties)
+        const payload: { Content: string; SenderId?: string } = { Content: content };
+        if (senderId) {
+          payload.SenderId = senderId;
+        }
+
+        console.log('📡 Sending message via SignalR hub SendMessage:', {
+          chatId,
+          payload,
+        });
+
+        // Invoke hub method; it will save + broadcast
+        const result: any = await connection.invoke('SendMessage', chatId, payload);
+        console.log('✅ Hub SendMessage result:', result);
+        return result;
+      } catch (err) {
+        console.error('Error sending message via SignalR:', err);
+        throw err;
+      }
+    },
+    [connection, chatId, isConnected]
+  );
 
   const addMessage = useCallback((message: ChatMessage) => {
     setMessages((prev) => {
