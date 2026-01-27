@@ -6,18 +6,22 @@ import { Provider } from 'react-redux';
 import { store } from '@/store';
 import AuthProvider from './authProvider';
 import ToastProvider from './toastProvider';
+import RouteGuard from './RouteGuard';
 
 export function Providers({ children }: { children: ReactNode }) {
     return (
         <Provider store={store}>
             <AuthProvider>
-                <ThemeProvider>
-                    <SidebarProvider>
-                        {children}
-                        <ToastProvider />
-                    </SidebarProvider>
-                </ThemeProvider>
+                <RouteGuard>
+                    <ThemeProvider>
+                        <SidebarProvider>
+                            {children}
+                            <ToastProvider />
+                        </SidebarProvider>
+                    </ThemeProvider>
+                </RouteGuard>
             </AuthProvider>
         </Provider>
     );
 }
+
