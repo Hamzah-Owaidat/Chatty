@@ -135,7 +135,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -298,7 +298,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             disabled={sending || !isConnected}
             className="flex-1 rounded-full px-4 py-2 bg-white dark:bg-stone-700 focus:outline-none text-gray-800 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 disabled:opacity-50"

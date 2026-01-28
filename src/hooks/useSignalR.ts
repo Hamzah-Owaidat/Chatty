@@ -19,6 +19,14 @@ export const useSignalR = (chatId: string | null) => {
     let isMounted = true;
     let currentConnection: HubConnection | null = null;
 
+    // Handlers kept in effect scope so we can .off(event, handler) in cleanup
+    let handleMessageReceived:
+      | ((message: any) => void)
+      | null = null;
+    let handleReconnecting: (() => void) | null = null;
+    let handleReconnected: (() => void) | null = null;
+    let handleClose: ((error?: Error) => void) | null = null;
+
     const initConnection = async () => {
       try {
         const conn = await startSignalRConnection();
@@ -44,17 +52,8 @@ export const useSignalR = (chatId: string | null) => {
           // Log all SignalR events for debugging
           console.log('🔍 Setting up SignalR event listeners...');
           
-          // Listen for ANY method call from SignalR (for debugging)
-          const originalInvoke = conn.invoke.bind(conn);
-          conn.invoke = function(method: string, ...args: any[]) {
-            console.log('📡 SignalR Invoke:', method, args);
-            return originalInvoke(method, ...args);
-          };
-          
-          // Set up message handler - use ref to get current chatId
-          // Backend broadcasts with ChatHubMethods.MessageReceived = "MessageReceived"
-          // so we must listen to that exact event name here.
-          conn.on('MessageReceived', (message: any) => {
+          // --- Handlers registered via .on(...) so we can .off(...) in cleanup ---
+          handleMessageReceived = (message: any) => {
             const currentChatId = chatIdRef.current;
             console.log('📨 Received message via SignalR:', {
               message,
@@ -118,38 +117,38 @@ export const useSignalR = (chatId: string | null) => {
                 currentChatId
               });
             }
-          });
-          
-          console.log('👂 SignalR message handler registered. Listening for "ReceiveMessage" events.');
-          
-          // Add a test listener to catch ANY SignalR messages (for debugging)
-          conn.onclose((error) => {
-            if (error) {
-              console.log('🔴 SignalR connection closed with error:', error);
-            }
-          });
-          
-          // Log when ANY method is called on the connection
-          console.log('🔍 Monitoring all SignalR events. If you see messages from backend, they will appear above.');
+          };
 
-          // Handle connection state changes
-          conn.onreconnecting(() => {
+          handleReconnecting = () => {
             console.log('🔄 SignalR reconnecting...');
             if (isMounted) setIsConnected(false);
-          });
+          };
 
-          conn.onreconnected(() => {
+          handleReconnected = () => {
             console.log('✅ SignalR reconnected');
             if (isMounted) setIsConnected(true);
-          });
+          };
 
-          conn.onclose(() => {
-            console.log('❌ SignalR connection closed');
+          handleClose = (error?: Error) => {
+            if (error) {
+              console.log('🔴 SignalR connection closed with error:', error);
+            } else {
+              console.log('❌ SignalR connection closed');
+            }
             if (isMounted) {
               setIsConnected(false);
               setConnection(null);
             }
-          });
+          };
+
+          // Register handlers with .on(...)
+          conn.on('MessageReceived', handleMessageReceived);
+          conn.on('reconnecting', handleReconnecting);
+          conn.on('reconnected', handleReconnected);
+          conn.on('close', handleClose);
+          
+          console.log('👂 SignalR message handler registered. Listening for "MessageReceived" events.');
+          console.log('🔍 Monitoring all SignalR events. If you see messages from backend, they will appear above.');
         }
       } catch (err) {
         console.error('Failed to initialize SignalR:', err);
@@ -167,10 +166,19 @@ export const useSignalR = (chatId: string | null) => {
       isMounted = false;
       if (currentConnection) {
         // Remove handlers before stopping
-        currentConnection.off('MessageReceived');
-        currentConnection.off('reconnecting');
-        currentConnection.off('reconnected');
-        currentConnection.off('close');
+        if (handleMessageReceived) {
+          currentConnection.off('MessageReceived', handleMessageReceived);
+        }
+        if (handleReconnecting) {
+          currentConnection.off('reconnecting', handleReconnecting);
+        }
+        if (handleReconnected) {
+          currentConnection.off('reconnected', handleReconnected);
+        }
+        if (handleClose) {
+          currentConnection.off('close', handleClose);
+        }
+
         stopSignalRConnection();
       }
     };
