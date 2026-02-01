@@ -50,6 +50,25 @@ const ChatSidebar = () => {
     }
   };
 
+  // Helper to ensure lastMessage is always a string
+  const ensureStringMessage = (message: any): string => {
+    if (typeof message === 'string') {
+      return message;
+    }
+    if (message === null || message === undefined) {
+      return '';
+    }
+    if (typeof message === 'object') {
+      // If it's a message object, extract the content
+      if (message.content) return String(message.content);
+      if (message.text) return String(message.text);
+      if (message.message) return String(message.message);
+      // Otherwise, stringify it
+      return JSON.stringify(message);
+    }
+    return String(message);
+  };
+
   // Fetch user chats from API
   useEffect(() => {
     const fetchChats = async () => {
@@ -93,7 +112,7 @@ const ChatSidebar = () => {
             name: name,
             avatar: avatar,
             status: chat.status || "offline",
-            lastMessage: chat.lastMessage || "",
+            lastMessage: ensureStringMessage(chat.lastMessage),
             lastTime: chat.lastMessageAt && chat.lastMessageAt !== "0001-01-01T00:00:00Z" 
               ? formatTime(chat.lastMessageAt) 
               : formatTime(chat.createdAt),
