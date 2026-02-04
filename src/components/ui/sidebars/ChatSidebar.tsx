@@ -21,13 +21,13 @@ interface ChatUserDisplay {
 }
 
 const ChatSidebar = () => {
-  const { isExpanded, isMobileOpen, isHovered } = useSidebar();
+  const { isExpanded, isMobileOpen, isHovered, toggleMobileSidebar } = useSidebar();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("messages");
   const [chats, setChats] = useState<ChatUserDisplay[]>([]);
   const [loading, setLoading] = useState(true);
-  const { setActiveUserId } = useChat();
+  const { setActiveUserId, setActiveUserName } = useChat();
   const currentUser = useAppSelector((state) => state.auth.user);
 
   // Helper function to format time (e.g., "2m ago", "10m ago", "2d ago")
@@ -84,39 +84,40 @@ const ChatSidebar = () => {
         }
         
         // Transform API response to match component's expected format
-        const transformedChats: ChatUserDisplay[] = userChats.map((chat: UserChat) => {
+        const transformedChats: ChatUserDisplay[] = userChats.map((entry: UserChat) => {
+          const chatCore = entry.chat;
+
+          // Determine display name
           let name: string;
-          let avatar: string = chat.image || "/images/user/user-01.jpg";
-          
-          if (chat.isGroupChat) {
+          if (chatCore.isGroupChat) {
             // Group chat: use group name
-            name = chat.groupName || `Group ${chat.id.slice(-6)}`;
+            name = chatCore.groupName || `Group ${chatCore.id.slice(-6)}`;
           } else {
-            // Direct chat: try to get participant info
-            // Note: The backend currently doesn't include participant user information in the response.
-            // The participantsIds array only contains timestamps, not user IDs or user details.
-            // TODO: Backend should include participant user info (userName, displayName, image) in the response.
-            
-            // If the backend provides user info in the response, use it
-            if (chat.displayName || chat.userName) {
-              name = chat.displayName || chat.userName || "Unknown User";
-              avatar = chat.image || "/images/user/user-01.jpg";
+            // Direct chat: use receiver info from new API
+            if (entry.receiver?.displayName) {
+              name = entry.receiver.displayName;
             } else {
-              // Fallback: show "Direct Chat" until backend provides participant info
               name = "Direct Chat";
             }
           }
-          
+
+          // Avatar: only use URL if provided; otherwise we'll show initials
+          const avatar = entry.receiver?.image ?? "";
+
+          const lastMsg = chatCore.lastMessage;
+          const lastMsgAt = chatCore.lastMessageAt;
+
           return {
-            id: chat.id,
-            name: name,
-            avatar: avatar,
-            status: chat.status || "offline",
-            lastMessage: ensureStringMessage(chat.lastMessage),
-            lastTime: chat.lastMessageAt && chat.lastMessageAt !== "0001-01-01T00:00:00Z" 
-              ? formatTime(chat.lastMessageAt) 
-              : formatTime(chat.createdAt),
-            unread: chat.unreadCount || 0,
+            id: entry.chatId || chatCore.id,
+            name,
+            avatar,
+            status: "offline", // real presence will come later from backend
+            lastMessage: ensureStringMessage(lastMsg),
+            lastTime:
+              lastMsgAt && lastMsgAt !== "0001-01-01T00:00:00Z"
+                ? formatTime(lastMsgAt)
+                : formatTime(chatCore.createdAt),
+            unread: entry.unreadMessagesCount || 0,
           };
         });
         
@@ -133,9 +134,14 @@ const ChatSidebar = () => {
     fetchChats();
   }, []); 
 
-  const handleUserClick = (userId: string) => {
+  const handleUserClick = (userId: string, userName: string) => {
     setSelectedUserId(userId);
     setActiveUserId(userId); // notify parent
+    setActiveUserName(userName);
+    // On small screens, close the sidebar after opening a chat
+    if (isMobileOpen) {
+      toggleMobileSidebar();
+    }
   };
 
   const filteredUsers = chats.filter(user =>
@@ -160,7 +166,7 @@ const ChatSidebar = () => {
   const renderUserItem = (user: ChatUserDisplay) => (
     <li key={user.id} className="mb-2">
       <button
-        onClick={() => handleUserClick(user.id)}
+        onClick={() => handleUserClick(user.id, user.name)}
         className={`flex items-center w-full p-3 rounded-xl transition hover:bg-gray-200 dark:hover:bg-stone-700 group relative ${
           selectedUserId === user.id
             ? "bg-blue-50 dark:bg-blue-900/20 shadow-sm border border-blue-200 dark:border-blue-800"
@@ -168,25 +174,40 @@ const ChatSidebar = () => {
         }`}
       >
         <div className="relative">
-          <Image
-            src={user.avatar}
-            alt={user.name}
-            width={48}
-            height={48}
-            className={`rounded-full object-cover border-2 ${
-              user.status === "online" 
-                ? "border-green-400" 
-                : user.status === "away" 
-                  ? "border-amber-400" 
-                  : "border-gray-300 dark:border-gray-600"
-            }`}
-          />
-          <span 
+          {user.avatar ? (
+            <Image
+              src={user.avatar}
+              alt={user.name}
+              width={48}
+              height={48}
+              className={`rounded-full object-cover border-2 ${
+                user.status === "online"
+                  ? "border-green-400"
+                  : user.status === "away"
+                    ? "border-amber-400"
+                    : "border-gray-300 dark:border-gray-600"
+              }`}
+            />
+          ) : (
+            <div
+              className={`w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold border-2 ${
+                user.status === "online"
+                  ? "border-green-400"
+                  : user.status === "away"
+                    ? "border-amber-400"
+                    : "border-gray-300 dark:border-gray-600"
+              }`}
+            >
+              {user.name?.trim().slice(0, 2).toUpperCase() || "U"}
+            </div>
+          )}
+
+          <span
             className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ${
-              user.status === "online" 
-                ? "bg-green-400" 
-                : user.status === "away" 
-                  ? "bg-amber-400" 
+              user.status === "online"
+                ? "bg-green-400"
+                : user.status === "away"
+                  ? "bg-amber-400"
                   : "bg-gray-400"
             }`}
           />

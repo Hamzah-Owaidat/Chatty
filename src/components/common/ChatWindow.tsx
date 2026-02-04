@@ -12,9 +12,10 @@ import { showToast } from "@/utils/toast";
 
 interface ChatWindowProps {
   chatId: string;
+  chatName?: string | null;
 }
 
-export default function ChatWindow({ chatId }: ChatWindowProps) {
+export default function ChatWindow({ chatId, chatName }: ChatWindowProps) {
   const [message, setMessage] = useState("");
   const [showAttachments, setShowAttachments] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -158,8 +159,8 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     { icon: FileText, label: "Document", color: "text-purple-600" },
   ];
 
-  // Get display name for the chat (this would ideally come from the chat data)
-  const chatDisplayName = "Chat"; // TODO: Get from chat context or props
+  // Get display name for the chat (coming from ChatContext via props)
+  const chatDisplayName = chatName || "Chat";
 
   return (
     <div className="flex flex-col h-[80vh] rounded-lg">

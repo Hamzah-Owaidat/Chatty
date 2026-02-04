@@ -36,25 +36,34 @@ export interface SendMessageRequest {
   content: string;
 }
 
+// New shape based on /chat/user-chats response
 export interface UserChat {
-  id: string;
-  isGroupChat: boolean;
-  groupName?: string | null;
-  participantsIds?: Array<{
-    timestamp: number;
-    creationTime: string;
-  }>;
-  adminId?: string | null;
-  createdAt: string;
-  lastMessageAt: string;
-  lastMessage?: string | null;
-  // Optional fields that might come from a different endpoint or be added later
-  userId?: string;
-  userName?: string;
-  displayName?: string;
-  image?: string;
-  status?: 'online' | 'offline' | 'away';
-  unreadCount?: number;
+  chatId: string;
+  userId: string;
+  lastReadMessageId?: string | null;
+  unreadMessagesCount: number;
+  lastReadAt: string;
+  isMuted: boolean;
+  role: number;
+  joinedAt: string;
+  lastUpdatedAt: string;
+  receiver?: {
+    displayName: string;
+    image?: string | null;
+  };
+  chat: {
+    id: string;
+    isGroupChat: boolean;
+    groupName?: string | null;
+    participantsIds?: Array<{
+      timestamp: number;
+      creationTime: string;
+    }>;
+    adminId?: string | null;
+    createdAt: string;
+    lastMessageAt: string;
+    lastMessage?: any;
+  };
 }
 
 export interface ApiChatResponse {
