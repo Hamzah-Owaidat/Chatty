@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Paperclip, Mic, Image, FileText, Camera, Check, CheckCheck, Phone, EllipsisVertical, Info, Trash2, XCircle, Search } from "lucide-react";
+import { Send, Paperclip, Mic, Image, FileText, Camera, Check, CheckCheck, Phone, EllipsisVertical, Info, Trash2, XCircle, Search, Smile } from "lucide-react";
+import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from "emoji-picker-react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useSignalR } from "@/hooks/useSignalR";
@@ -9,6 +10,7 @@ import { ChatMessage } from "@/types/chat/chat.models";
 import { useAppSelector } from "@/store/hooks";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
+import { useTheme } from "@/context/ThemeContext";
 
 interface ChatWindowProps {
   chatId: string;
@@ -17,10 +19,13 @@ interface ChatWindowProps {
 export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [message, setMessage] = useState("");
   const [showAttachments, setShowAttachments] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
   const currentUser = useAppSelector((state) => state.auth.user);
+  const { theme } = useTheme();
 
   // Use SignalR hook for real-time messaging
   const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage } = useSignalR(chatId);
@@ -67,6 +72,12 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           };
           return transformed;
         });
+        // Ensure oldest-to-newest order regardless of API ordering
+        transformedMessages.sort(
+          (a, b) =>
+            new Date(a.sentAt || a.createdAt || a.timestamp || 0).getTime() -
+            new Date(b.sentAt || b.createdAt || b.timestamp || 0).getTime()
+        );
         setMessages(transformedMessages);
       } catch (err) {
         console.error("Error fetching messages:", err);
@@ -83,6 +94,23 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Close emoji picker when clicking outside of it
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
 
   const MessageStatus = ({ status }: { status?: string }) => {
     if (status === "sent") return <Check className="w-4 h-4 text-gray-400" />;
@@ -133,6 +161,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessage((prev) => prev + emojiData.emoji);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -293,6 +325,22 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           >
             <Paperclip className="w-5 h-5" />
           </button>
+
+          <div className="relative" ref={emojiPickerRef}>
+            <Smile
+              className="p-2 w-9 h-9 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-stone-700 rounded-full transition-colors cursor-pointer"
+              onClick={() => setShowEmojiPicker((prev) => !prev)}
+            />
+            {showEmojiPicker && (
+              <div className="absolute bottom-full left-0 z-40 mb-2">
+                <EmojiPicker
+                  onEmojiClick={handleEmojiClick}
+                  theme={theme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
+                  lazyLoadEmojis
+                />
+              </div>
+            )}
+          </div>
 
           <input
             type="text"
