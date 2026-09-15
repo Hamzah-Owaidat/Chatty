@@ -36,25 +36,36 @@ export interface SendMessageRequest {
   content: string;
 }
 
-export interface UserChat {
+export interface ChatReceiver {
+  displayName: string;
+  image: string;
+}
+
+export interface ChatSummary {
   id: string;
   isGroupChat: boolean;
   groupName?: string | null;
-  participantsIds?: Array<{
-    timestamp: number;
-    creationTime: string;
-  }>;
+  participantsIds: string[];
   adminId?: string | null;
   createdAt: string;
   lastMessageAt: string;
-  lastMessage?: string | null;
-  // Optional fields that might come from a different endpoint or be added later
-  userId?: string;
-  userName?: string;
-  displayName?: string;
-  image?: string;
+  lastMessage?: ChatMessage | null;
+}
+
+// Mirrors the backend's UserChatStateDto (GET /chat/user-chats)
+export interface UserChat {
+  chatId: string;
+  userId: string;
+  lastReadMessageId?: string | null;
+  unreadMessagesCount: number;
+  lastReadAt: string;
+  isMuted: boolean;
+  role: number;
+  joinedAt: string;
+  lastUpdatedAt: string;
+  receiver?: ChatReceiver | null;
+  chat?: ChatSummary | null;
   status?: 'online' | 'offline' | 'away';
-  unreadCount?: number;
 }
 
 export interface ApiChatResponse {

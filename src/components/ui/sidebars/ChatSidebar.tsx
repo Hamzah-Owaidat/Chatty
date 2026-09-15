@@ -85,38 +85,31 @@ const ChatSidebar = () => {
         
         // Transform API response to match component's expected format
         const transformedChats: ChatUserDisplay[] = userChats.map((chat: UserChat) => {
+          const chatInfo = chat.chat;
           let name: string;
-          let avatar: string = chat.image || "/images/user/user-01.jpg";
-          
-          if (chat.isGroupChat) {
+          let avatar: string = "/images/user/user-01.jpg";
+
+          if (chatInfo?.isGroupChat) {
             // Group chat: use group name
-            name = chat.groupName || `Group ${chat.id.slice(-6)}`;
+            name = chatInfo.groupName || `Group ${chatInfo.id.slice(-6)}`;
+          } else if (chat.receiver) {
+            // Direct chat: use the other participant's info
+            name = chat.receiver.displayName || "Unknown User";
+            avatar = chat.receiver.image || avatar;
           } else {
-            // Direct chat: try to get participant info
-            // Note: The backend currently doesn't include participant user information in the response.
-            // The participantsIds array only contains timestamps, not user IDs or user details.
-            // TODO: Backend should include participant user info (userName, displayName, image) in the response.
-            
-            // If the backend provides user info in the response, use it
-            if (chat.displayName || chat.userName) {
-              name = chat.displayName || chat.userName || "Unknown User";
-              avatar = chat.image || "/images/user/user-01.jpg";
-            } else {
-              // Fallback: show "Direct Chat" until backend provides participant info
-              name = "Direct Chat";
-            }
+            name = "Direct Chat";
           }
-          
+
           return {
-            id: chat.id,
+            id: chat.chatId,
             name: name,
             avatar: avatar,
             status: chat.status || "offline",
-            lastMessage: ensureStringMessage(chat.lastMessage),
-            lastTime: chat.lastMessageAt && chat.lastMessageAt !== "0001-01-01T00:00:00Z" 
-              ? formatTime(chat.lastMessageAt) 
-              : formatTime(chat.createdAt),
-            unread: chat.unreadCount || 0,
+            lastMessage: ensureStringMessage(chatInfo?.lastMessage),
+            lastTime: chatInfo?.lastMessageAt && chatInfo.lastMessageAt !== "0001-01-01T00:00:00Z"
+              ? formatTime(chatInfo.lastMessageAt)
+              : formatTime(chatInfo?.createdAt || chat.joinedAt),
+            unread: chat.unreadMessagesCount || 0,
           };
         });
         

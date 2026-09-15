@@ -24,6 +24,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
   const currentUser = useAppSelector((state) => state.auth.user);
   const { theme } = useTheme();
 
@@ -111,6 +112,31 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmojiPicker]);
+
+  // Typing anywhere on the page (outside another input/textarea) jumps focus to the
+  // message box and starts typing there, instead of requiring a click first.
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (sending || !isConnected) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.length !== 1) return; // letters, digits, symbols, space
+
+      const target = e.target as HTMLElement | null;
+      const isAlreadyEditable =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (isAlreadyEditable) return;
+
+      e.preventDefault();
+      setMessage((prev) => prev + e.key);
+      messageInputRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [sending, isConnected]);
 
   const MessageStatus = ({ status }: { status?: string }) => {
     if (status === "sent") return <Check className="w-4 h-4 text-gray-400" />;
@@ -343,6 +369,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           </div>
 
           <input
+            ref={messageInputRef}
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
