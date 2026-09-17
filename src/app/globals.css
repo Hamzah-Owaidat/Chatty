@@ -717,8 +717,16 @@ span.flatpickr-weekday,
   @apply border-[6px] border-brand-500 bg-brand-500 dark:border-brand-500;
 }
 
+/* Modern scroller utility — used by every scroll container in the chat UI */
+.chat-scrollbar {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(26, 123, 155, 0.2) transparent;
+}
+
 .chat-scrollbar::-webkit-scrollbar {
-  width: 2px;
+  width: 10px;
 }
 
 .chat-scrollbar::-webkit-scrollbar-track {
@@ -726,16 +734,160 @@ span.flatpickr-weekday,
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #1a7b9b;
-  border-radius: 2px;
+  background-color: rgba(26, 123, 155, 0.2);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 99px;
 }
 
-.chat-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #15657d;
+.chat-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(26, 123, 155, 0.38);
+  border-width: 2px;
 }
 
-/* For Firefox */
-.chat-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: #1a7b9b transparent;
+.chat-scrollbar::-webkit-scrollbar-thumb:active {
+  background-color: rgba(21, 101, 125, 0.62);
+}
+
+.dark .chat-scrollbar {
+  scrollbar-color: rgba(64, 174, 205, 0.26) transparent;
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(64, 174, 205, 0.26);
+}
+
+.dark .chat-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(64, 174, 205, 0.5);
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb:active {
+  background-color: rgba(96, 199, 227, 0.7);
+}
+
+/* Soft fade at the top/bottom edge of scrollable lists */
+.fade-y {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 22px,
+    #000 calc(100% - 22px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 22px,
+    #000 calc(100% - 22px),
+    transparent 100%
+  );
+}
+
+@keyframes bubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(18, 183, 106, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(18, 183, 106, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(18, 183, 106, 0);
+  }
+}
+
+@keyframes badgeGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(26, 123, 155, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(26, 123, 155, 0);
+  }
+}
+
+@keyframes dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -160% 0;
+  }
+  to {
+    background-position: 260% 0;
+  }
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Looping animation helpers (used instead of raw Tailwind arbitrary values so
+   they can be switched off under prefers-reduced-motion in one place) */
+.animate-ring {
+  animation: ring 2.6s ease-out infinite;
+}
+
+.animate-badge-glow {
+  animation: badgeGlow 2.4s ease-in-out infinite;
+}
+
+.animate-typing-dot {
+  animation: dot 1.2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(16, 24, 40, 0.06) 0%,
+    rgba(16, 24, 40, 0.12) 50%,
+    rgba(16, 24, 40, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.dark .animate-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ring,
+  .animate-badge-glow,
+  .animate-typing-dot,
+  .animate-shimmer {
+    animation: none !important;
+  }
 }

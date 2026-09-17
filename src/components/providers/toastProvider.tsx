@@ -1,6 +1,7 @@
 "use client";
 
-import { Toaster } from "react-hot-toast";
+import { Toaster, ToastBar, toast } from "react-hot-toast";
+import { X } from "lucide-react";
 
 export default function ToastProvider() {
   return (
@@ -25,6 +26,26 @@ export default function ToastProvider() {
           style: { background: "#2563eb" },
         },
       }}
-    />
+    >
+      {(t) => (
+        <ToastBar toast={t}>
+          {({ icon, message }) => (
+            <>
+              {icon}
+              {message}
+              {t.type !== "loading" && (
+                <button
+                  onClick={() => toast.dismiss(t.id)}
+                  className="ml-2 flex items-center justify-center rounded-full p-1 opacity-70 transition-opacity hover:opacity-100"
+                  aria-label="Dismiss notification"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </>
+          )}
+        </ToastBar>
+      )}
+    </Toaster>
   );
 }

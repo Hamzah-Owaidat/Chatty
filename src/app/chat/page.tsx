@@ -10,10 +10,10 @@ export default function ChatPage() {
   return (
     <>
       {activeUserId ? (
-        <ChatWindow userId={activeUserId} />
+        <ChatWindow chatId={activeUserId} />
       ) : (
         <div className="text-center text-gray-500 mt-20">
-          👋 Select a user to start chatting
+          👋 Select a chat to start messaging
         </div>
       )}
     </>
