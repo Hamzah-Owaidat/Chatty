@@ -1,4 +1,5 @@
 import type React from "react";
+import { twMerge } from "tailwind-merge";
 
 interface CheckboxProps {
   label?: string;
@@ -23,12 +24,14 @@ const Checkbox: React.FC<CheckboxProps> = ({
         disabled ? "cursor-not-allowed opacity-60" : ""
       }`}
     >
-      <div className="relative w-5 h-5">
+      <div className="relative h-[18px] w-[18px]">
         <input
           id={id}
           type="checkbox"
-          className={`w-5 h-5 appearance-none cursor-pointer dark:border-gray-700 border border-gray-300 checked:border-transparent rounded-md checked:bg-[#1a7b9b] disabled:opacity-60 
-          ${className}`}
+          className={twMerge(
+            "h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border border-gray-300 transition-all duration-150 checked:border-transparent checked:bg-gradient-to-br checked:from-[#1f88aa] checked:to-[#17708d] checked:shadow-[0_2px_6px_-1px_rgba(26,123,155,.6)] disabled:opacity-60 dark:border-stone-600",
+            className
+          )}
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           disabled={disabled}
@@ -37,8 +40,8 @@ const Checkbox: React.FC<CheckboxProps> = ({
           <svg
             className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
+            width="12"
+            height="12"
             viewBox="0 0 14 14"
             fill="none"
           >
@@ -55,8 +58,8 @@ const Checkbox: React.FC<CheckboxProps> = ({
           <svg
             className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
+            width="12"
+            height="12"
             viewBox="0 0 14 14"
             fill="none"
           >

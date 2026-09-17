@@ -87,7 +87,7 @@ const AppHeader: React.FC = () => {
           </button>
 
           <div className="lg:hidden">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-full border border-gray-200/60 bg-white/60 p-1 backdrop-blur-md backdrop-saturate-150 dark:border-stone-800/60 dark:bg-stone-900/60">
               {[
                 { icon: <MessageCircle size={20} />, label: "Messages" },
                 { icon: <Phone size={20} />, label: "Calls" },
@@ -95,12 +95,10 @@ const AppHeader: React.FC = () => {
               ].map((item, index) => (
                 <div
                   key={index}
-                  className="group relative bg-transparent hover:bg-[#1a7b9b] border border-gray-300 text-stone-700 hover:text-white hover:border-none dark:text-white dark:border-stone-700 cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center shadow-md transition-transform duration-200 hover:scale-110 hover:shadow-lg"
+                  aria-label={item.label}
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-stone-600 transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:-translate-y-px hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]"
                 >
                   {item.icon}
-                  <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-[#1a7b9b]  group-hover:block -bottom-9">
-                    {item.label}
-                  </div>
                 </div>
               ))}
             </div>
@@ -127,7 +125,7 @@ const AppHeader: React.FC = () => {
           </button>
 
           <div className="hidden lg:block">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-full border border-gray-200/60 bg-white/60 p-1 backdrop-blur-md backdrop-saturate-150 dark:border-stone-800/60 dark:bg-stone-900/60">
               {[
                 { key: "messages", icon: <MessageCircle size={20} />, label: "Messages" },
                 { key: "calls", icon: <Phone size={20} />, label: "Calls" },
@@ -136,16 +134,14 @@ const AppHeader: React.FC = () => {
                 <div
                   key={item.key}
                   onClick={() => setActiveTab(item.key as any)}
-                  className={`group relative cursor-pointer rounded-full p-3 h-11 w-11 flex items-center justify-center 
-          ${activeTab === item.key
-                      ? "bg-[#1a7b9b] text-white"
-                      : "bg-transparent hover:bg-[#1a7b9b] border border-gray-300 dark:border-stone-700 text-stone-700 hover:text-white hover:border-none dark:text-white transition-colors"
-                    }`}
+                  aria-label={item.label}
+                  className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:-translate-y-px ${
+                    activeTab === item.key
+                      ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]"
+                      : "text-stone-600 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]"
+                  }`}
                 >
                   {item.icon}
-                  <div className="absolute z-10 hidden px-2 py-1 text-xs text-white whitespace-nowrap rounded bg-[#1a7b9b] group-hover:block -bottom-9">
-                    {item.label}
-                  </div>
                 </div>
               ))}
             </div>

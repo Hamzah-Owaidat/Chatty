@@ -1,6 +1,7 @@
 "use client";
 import type React from "react";
 import { useEffect, useRef } from "react";
+import { twMerge } from "tailwind-merge";
 
 interface DropdownProps {
   isOpen: boolean;
@@ -28,9 +29,17 @@ export const Dropdown: React.FC<DropdownProps> = ({
     }
   };
 
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      onClose();
+    }
+  };
+
   document.addEventListener("mousedown", handleClickOutside);
+  document.addEventListener("keydown", handleKeyDown);
   return () => {
     document.removeEventListener("mousedown", handleClickOutside);
+    document.removeEventListener("keydown", handleKeyDown);
   };
 }, [onClose]);
 
@@ -40,7 +49,10 @@ export const Dropdown: React.FC<DropdownProps> = ({
   return (
     <div
       ref={dropdownRef}
-      className={`absolute z-40  right-0 mt-2  rounded-xl border border-gray-200 bg-white  shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark ${className}`}
+      className={twMerge(
+        "absolute z-40 right-0 mt-2 rounded-xl border border-gray-200 bg-white shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark",
+        className
+      )}
     >
       {children}
     </div>

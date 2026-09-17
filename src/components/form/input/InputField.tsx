@@ -1,4 +1,5 @@
 import React, { FC } from "react";
+import { twMerge } from "tailwind-merge";
 
 interface InputProps {
   type?: "text" | "number" | "email" | "password" | "date" | "time" | string;
@@ -36,7 +37,17 @@ const Input: FC<InputProps> = ({
   hint,
 }) => {
   // Determine input styles based on state (disabled, success, error)
-  const inputClasses = `h-11 w-full rounded-lg border border-gray-300 outline-none appearance-none px-4 py-2.5 text-sm placeholder:text-gray-400 dark:bg-stone-950 dark:text-white/90 dark:placeholder:text-white/30 dark:border-gray-700 ${className}`;
+  const stateBorderClasses = error
+    ? "border-l-[3px] border-l-[#f04438] dark:border-l-[#fda29b]"
+    : success
+    ? "border-l-[3px] border-l-success-500 dark:border-l-success-400"
+    : "";
+
+  const inputClasses = twMerge(
+    "w-full rounded-2xl border border-gray-300 bg-white px-4 py-[13px] text-sm text-gray-800 placeholder:text-gray-400 outline-none appearance-none shadow-[inset_0_1px_2px_rgba(16,24,40,.04)] transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] focus:-translate-y-px focus:border-[#1a7b9b] focus:ring-4 focus:ring-[#1a7b9b]/12 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-[#292524] dark:text-white/90 dark:placeholder:text-white/30 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.3)]",
+    stateBorderClasses,
+    className
+  );
 
   return (
     <div className="relative">
