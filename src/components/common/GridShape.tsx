@@ -1,25 +1,16 @@
-import Image from "next/image";
 import React from "react";
 
 export default function GridShape() {
   return (
-    <>
-      <div className="absolute right-0 top-10 -z-1 w-full max-w-[250px] xl:max-w-[450px]">
-        <Image
-          width={540}
-          height={254}
-          src="/images/shape/grid-01.svg"
-          alt="grid"
-        />
-      </div>
-      <div className="absolute bottom-10 left-0 -z-1 w-full max-w-[250px] rotate-180 xl:max-w-[450px]">
-        <Image
-          width={540}
-          height={254}
-          src="/images/shape/grid-01.svg"
-          alt="grid"
-        />
-      </div>
-    </>
+    <div
+      className="pointer-events-none absolute inset-0 z-0 dark:opacity-30"
+      style={{
+        backgroundImage:
+          "linear-gradient(#e0e4ea 1px, transparent 1px), linear-gradient(90deg, #e0e4ea 1px, transparent 1px)",
+        backgroundSize: "30px 30px",
+        maskImage: "radial-gradient(60% 55% at 50% 45%, #000, transparent)",
+        WebkitMaskImage: "radial-gradient(60% 55% at 50% 45%, #000, transparent)",
+      }}
+    />
   );
 }
