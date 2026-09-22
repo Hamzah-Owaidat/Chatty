@@ -1,6 +1,6 @@
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
-import { UserChat, ApiChatResponse } from '@/types/chat/chat.models';
+import { UserChat, ApiChatResponse, ChatCreateDto, ChatSummary } from '@/types/chat/chat.models';
 
 export async function getUserChats(): Promise<UserChat[]> {
   const token = getSavedToken();
@@ -37,6 +37,32 @@ export async function getUserChats(): Promise<UserChat[]> {
       throw err.response.data;
     }
     // For network errors or other issues
+    throw err;
+  }
+}
+
+// POST /api/chat — group chats only. Response is the raw Chat object, not the
+// { isSuccess, data } envelope (and on failure the body is a plain error string).
+export async function createChat(payload: ChatCreateDto): Promise<ChatSummary> {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  try {
+    const response = await api.post(
+      '/chat',
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    return response.data;
+  } catch (err: any) {
+    if (err.response?.data) {
+      throw err.response.data;
+    }
     throw err;
   }
 }

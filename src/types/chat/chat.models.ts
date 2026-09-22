@@ -44,7 +44,9 @@ export interface MessageUpdatedDto {
   lastReadAt: string;
 }
 
-export interface ChatReceiver {
+// Backend's UserDto — the other chat member(s), already filtered to exclude the caller
+export interface ChatParticipant {
+  id: string;
   displayName: string;
   image: string;
 }
@@ -71,7 +73,7 @@ export interface UserChat {
   role: number;
   joinedAt: string;
   lastUpdatedAt: string;
-  receiver?: ChatReceiver | null;
+  participants?: ChatParticipant[];
   chat?: ChatSummary | null;
   status?: 'online' | 'offline' | 'away';
 }
@@ -81,4 +83,20 @@ export interface ApiChatResponse {
   statusCode: number;
   error: any;
   data: UserChat[];
+}
+
+// POST /api/chat body — group chats only; 1:1 chats come from an accepted ChatRequest
+export interface ChatCreateDto {
+  isGroupChat: boolean;
+  groupName: string;
+  participantsIds: string[];
+  adminId: string;
+}
+
+// GET /api/chat-requests/incoming|outgoing, POST /api/chat-requests/{id}/accept response data
+export interface ChatRequestDto {
+  id: string;
+  sender: ChatParticipant;
+  receiver: ChatParticipant;
+  createdAt: string;
 }

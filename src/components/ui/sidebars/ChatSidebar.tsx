@@ -6,13 +6,16 @@ import { useSidebar } from "../../../context/SidebarContext";
 import { Search, Plus, MessageSquarePlus, UsersRound, Link2 } from "lucide-react";
 import { useChat } from "@/context/ChatContext";
 import { getUserChats } from "@/lib/api/chat";
-import { UserChat } from "@/types/chat/chat.models";
+import { UserChat, ChatParticipant } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useAppSelector } from "@/store/hooks";
 import { startSignalRConnection } from "@/lib/signalr/signalr";
 import { Dropdown } from "../dropdown/Dropdown";
 import { DropdownItem } from "../dropdown/DropdownItem";
+import { useModal } from "@/hooks/useModal";
+import NewChatModal from "@/components/common/NewChatModal";
+import NewGroupModal from "@/components/common/NewGroupModal";
 
 interface ChatUserDisplay {
   id: string;
@@ -22,6 +25,8 @@ interface ChatUserDisplay {
   lastMessage: string;
   lastTime: string;
   unread: number;
+  isGroupChat: boolean;
+  participants: ChatParticipant[];
 }
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
@@ -34,8 +39,10 @@ const ChatSidebar = () => {
   const [chats, setChats] = useState<ChatUserDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-  const { setActiveUserId } = useChat();
+  const { setActiveUserId, setActiveChat, chatListVersion } = useChat();
   const currentUser = useAppSelector((state) => state.auth.user);
+  const newChatModal = useModal();
+  const newGroupModal = useModal();
 
   const showFull = isExpanded || isHovered || isMobileOpen;
 
@@ -85,13 +92,15 @@ const ChatSidebar = () => {
     let name: string;
     let avatar: string = "/images/user/user-01.jpg";
 
+    const otherParticipant = chat.participants?.[0];
+
     if (chatInfo?.isGroupChat) {
       // Group chat: use group name
       name = chatInfo.groupName || `Group ${chatInfo.id.slice(-6)}`;
-    } else if (chat.receiver) {
+    } else if (otherParticipant) {
       // Direct chat: use the other participant's info
-      name = chat.receiver.displayName || "Unknown User";
-      avatar = chat.receiver.image || avatar;
+      name = otherParticipant.displayName || "Unknown User";
+      avatar = otherParticipant.image || avatar;
     } else {
       name = "Direct Chat";
     }
@@ -106,6 +115,8 @@ const ChatSidebar = () => {
         ? formatTime(chatInfo.lastMessageAt)
         : formatTime(chatInfo?.createdAt || chat.joinedAt),
       unread: chat.unreadMessagesCount || 0,
+      isGroupChat: !!chatInfo?.isGroupChat,
+      participants: chat.participants || [],
     };
   };
 
@@ -134,8 +145,10 @@ const ChatSidebar = () => {
     };
 
     fetchChats();
+    // transformChat is a pure render-scoped helper — refetch only when asked to
+    // (chatListVersion bumps after creating/accepting a chat elsewhere in the tree).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [chatListVersion]);
 
   // Live unread badges: the initial GET only reflects the moment the sidebar mounted.
   // Every send/read after that pushes a ChatStateUpdated for this user on the shared
@@ -153,9 +166,12 @@ const ChatSidebar = () => {
         handleChatStateUpdated = (dto: UserChat) => {
           setChats((prev) => {
             const idx = prev.findIndex((c) => c.id === dto.chatId);
-            if (idx === -1) return prev; // not a chat this sidebar already knows about
+            const transformed = transformChat(dto);
+            // Not in the list yet — a chat we were just added to (request accepted,
+            // added to a group) — add it instead of dropping the event.
+            if (idx === -1) return [...prev, transformed];
             const next = [...prev];
-            next[idx] = transformChat(dto);
+            next[idx] = transformed;
             return next;
           });
         };
@@ -181,9 +197,17 @@ const ChatSidebar = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleUserClick = (userId: string) => {
-    setSelectedUserId(userId);
-    setActiveUserId(userId); // notify parent
+  const handleUserClick = (user: ChatUserDisplay) => {
+    setSelectedUserId(user.id);
+    setActiveUserId(user.id); // notify parent
+    setActiveChat({
+      id: user.id,
+      name: user.name,
+      avatar: user.avatar,
+      status: user.status,
+      isGroupChat: user.isGroupChat,
+      participants: user.participants,
+    });
   };
 
   const filteredUsers = chats.filter(user =>
@@ -216,7 +240,7 @@ const ChatSidebar = () => {
   const renderUserItem = (user: ChatUserDisplay, index: number) => (
     <li key={user.id} className="mb-1.5">
       <button
-        onClick={() => handleUserClick(user.id)}
+        onClick={() => handleUserClick(user)}
         style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}
         className={`animate-[floatIn_.22s_cubic-bezier(.2,.8,.2,1)_both] relative flex w-full items-center rounded-2xl p-3 text-left transition-all duration-200 ${EASE} ${
           selectedUserId === user.id
@@ -360,14 +384,20 @@ const ChatSidebar = () => {
                 className={`w-[208px] origin-top-right animate-[floatIn_.18s_cubic-bezier(.2,.8,.2,1)_both] rounded-2xl border border-gray-200/70 bg-white/90 p-1.5 shadow-[0_1px_2px_rgba(16,24,40,.04),0_20px_40px_-20px_rgba(16,24,40,.5)] backdrop-blur-md backdrop-saturate-150 dark:border-stone-800/70 dark:bg-stone-900/90`}
               >
                 <DropdownItem
-                  onItemClick={() => setIsAddMenuOpen(false)}
+                  onItemClick={() => {
+                    setIsAddMenuOpen(false);
+                    newChatModal.openModal();
+                  }}
                   baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
                 >
                   <MessageSquarePlus size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
                   New chat
                 </DropdownItem>
                 <DropdownItem
-                  onItemClick={() => setIsAddMenuOpen(false)}
+                  onItemClick={() => {
+                    setIsAddMenuOpen(false);
+                    newGroupModal.openModal();
+                  }}
                   baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
                 >
                   <UsersRound size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
@@ -397,6 +427,9 @@ const ChatSidebar = () => {
           )}
         </ul>
       </div>
+
+      <NewChatModal isOpen={newChatModal.isOpen} onClose={newChatModal.closeModal} />
+      <NewGroupModal isOpen={newGroupModal.isOpen} onClose={newGroupModal.closeModal} />
     </>
   );
 };
