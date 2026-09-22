@@ -11,6 +11,7 @@ import { useAppSelector } from "@/store/hooks";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useTheme } from "@/context/ThemeContext";
+import { normalizeMessageStatus } from "@/utils/messageStatus";
 
 interface ChatWindowProps {
   chatId: string;
@@ -37,7 +38,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const { theme } = useTheme();
 
   // Use SignalR hook for real-time messaging
-  const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage } = useSignalR(chatId);
+  const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage } = useSignalR(chatId, currentUser?.id);
 
   // Helper to ensure content is always a string
   const ensureStringContent = (content: any): string => {
@@ -74,7 +75,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             sentAt: msg.sentAt,
             createdAt: msg.createdAt,
             isRead: msg.isRead,
-            status: msg.status,
+            status: normalizeMessageStatus(msg.status),
             // Keep nested objects for future use
             sender: msg.sender,
             chat: msg.chat,
@@ -170,9 +171,8 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   }, [sending, isConnected]);
 
   const MessageStatus = ({ status }: { status?: string }) => {
-    if (status === "sent") return <Check className="w-4 h-4 text-gray-400" />;
-    if (status === "delivered") return <CheckCheck className="w-4 h-4 text-gray-400" />;
     if (status === "seen") return <CheckCheck className="w-4 h-4 text-success-400" />;
+    if (status === "sent") return <Check className="w-4 h-4 text-gray-400" />;
     return null;
   };
 

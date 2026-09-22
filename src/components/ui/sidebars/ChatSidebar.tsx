@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import { HubConnection } from "@microsoft/signalr";
 import { useSidebar } from "../../../context/SidebarContext";
 import { Search, Plus, MessageSquarePlus, UsersRound, Link2 } from "lucide-react";
 import { useChat } from "@/context/ChatContext";
@@ -9,6 +10,7 @@ import { UserChat } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useAppSelector } from "@/store/hooks";
+import { startSignalRConnection } from "@/lib/signalr/signalr";
 import { Dropdown } from "../dropdown/Dropdown";
 import { DropdownItem } from "../dropdown/DropdownItem";
 
@@ -76,6 +78,37 @@ const ChatSidebar = () => {
     return String(message);
   };
 
+  // Transform a backend UserChatStateDto (REST list item or ChatStateUpdated payload)
+  // into the shape this component renders.
+  const transformChat = (chat: UserChat): ChatUserDisplay => {
+    const chatInfo = chat.chat;
+    let name: string;
+    let avatar: string = "/images/user/user-01.jpg";
+
+    if (chatInfo?.isGroupChat) {
+      // Group chat: use group name
+      name = chatInfo.groupName || `Group ${chatInfo.id.slice(-6)}`;
+    } else if (chat.receiver) {
+      // Direct chat: use the other participant's info
+      name = chat.receiver.displayName || "Unknown User";
+      avatar = chat.receiver.image || avatar;
+    } else {
+      name = "Direct Chat";
+    }
+
+    return {
+      id: chat.chatId,
+      name: name,
+      avatar: avatar,
+      status: chat.status || "offline",
+      lastMessage: ensureStringMessage(chatInfo?.lastMessage),
+      lastTime: chatInfo?.lastMessageAt && chatInfo.lastMessageAt !== "0001-01-01T00:00:00Z"
+        ? formatTime(chatInfo.lastMessageAt)
+        : formatTime(chatInfo?.createdAt || chat.joinedAt),
+      unread: chat.unreadMessagesCount || 0,
+    };
+  };
+
   // Fetch user chats from API
   useEffect(() => {
     const fetchChats = async () => {
@@ -90,37 +123,7 @@ const ChatSidebar = () => {
           return;
         }
 
-        // Transform API response to match component's expected format
-        const transformedChats: ChatUserDisplay[] = userChats.map((chat: UserChat) => {
-          const chatInfo = chat.chat;
-          let name: string;
-          let avatar: string = "/images/user/user-01.jpg";
-
-          if (chatInfo?.isGroupChat) {
-            // Group chat: use group name
-            name = chatInfo.groupName || `Group ${chatInfo.id.slice(-6)}`;
-          } else if (chat.receiver) {
-            // Direct chat: use the other participant's info
-            name = chat.receiver.displayName || "Unknown User";
-            avatar = chat.receiver.image || avatar;
-          } else {
-            name = "Direct Chat";
-          }
-
-          return {
-            id: chat.chatId,
-            name: name,
-            avatar: avatar,
-            status: chat.status || "offline",
-            lastMessage: ensureStringMessage(chatInfo?.lastMessage),
-            lastTime: chatInfo?.lastMessageAt && chatInfo.lastMessageAt !== "0001-01-01T00:00:00Z"
-              ? formatTime(chatInfo.lastMessageAt)
-              : formatTime(chatInfo?.createdAt || chat.joinedAt),
-            unread: chat.unreadMessagesCount || 0,
-          };
-        });
-
-        setChats(transformedChats);
+        setChats(userChats.map(transformChat));
       } catch (err) {
         console.error("Error fetching chats:", err);
         showToast.error(getErrorMessage(err));
@@ -131,6 +134,51 @@ const ChatSidebar = () => {
     };
 
     fetchChats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Live unread badges: the initial GET only reflects the moment the sidebar mounted.
+  // Every send/read after that pushes a ChatStateUpdated for this user on the shared
+  // hub connection — patch the matching row in place instead of ever refetching.
+  useEffect(() => {
+    let isMounted = true;
+    let conn: HubConnection | null = null;
+    let handleChatStateUpdated: ((dto: UserChat) => void) | null = null;
+
+    const attach = async () => {
+      try {
+        conn = await startSignalRConnection();
+        if (!isMounted) return;
+
+        handleChatStateUpdated = (dto: UserChat) => {
+          setChats((prev) => {
+            const idx = prev.findIndex((c) => c.id === dto.chatId);
+            if (idx === -1) return prev; // not a chat this sidebar already knows about
+            const next = [...prev];
+            next[idx] = transformChat(dto);
+            return next;
+          });
+        };
+
+        conn.on("ChatStateUpdated", handleChatStateUpdated);
+      } catch (err) {
+        console.error("Failed to attach ChatStateUpdated listener:", err);
+      }
+    };
+
+    attach();
+
+    return () => {
+      isMounted = false;
+      // Only detach our own listener — the connection is a shared singleton that
+      // ChatWindow may still be using, so it isn't ours to stop here.
+      if (conn && handleChatStateUpdated) {
+        conn.off("ChatStateUpdated", handleChatStateUpdated);
+      }
+    };
+    // transformChat is a pure render-scoped helper (no closures over changing state);
+    // this effect intentionally attaches once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleUserClick = (userId: string) => {
