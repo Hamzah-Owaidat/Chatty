@@ -60,7 +60,7 @@ export async function getCurrentUser() {
   if (!token) throw new Error('No auth token found');
 
   const response = await api.get(
-    '/auth/me',
+    '/user/me',
     {
       headers: {
         Authorization: `Bearer ${token}`,

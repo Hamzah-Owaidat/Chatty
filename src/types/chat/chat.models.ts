@@ -17,7 +17,7 @@ export interface ChatMessage {
   sentAt?: string;
   createdAt?: string;
   isRead?: boolean;
-  status?: 'sent' | 'delivered' | 'seen';
+  status?: 'sent' | 'seen' | 'failed';
   // Nested objects from API
   sender?: {
     id: string;
@@ -34,6 +34,14 @@ export interface ChatMessage {
 
 export interface SendMessageRequest {
   content: string;
+}
+
+// SignalR "MessagesUpdated" payload / POST .../message/read response
+export interface MessageUpdatedDto {
+  chatId: string;
+  userId: string;
+  lastReadMessageId: string;
+  lastReadAt: string;
 }
 
 export interface ChatReceiver {
