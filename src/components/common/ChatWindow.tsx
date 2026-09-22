@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Send, Paperclip, Mic, Image, FileText, Camera, Check, CheckCheck, Phone, EllipsisVertical, Info, Trash2, XCircle, Search, Smile, ChevronDown } from "lucide-react";
 import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from "emoji-picker-react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
@@ -12,6 +12,7 @@ import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useTheme } from "@/context/ThemeContext";
 import { normalizeMessageStatus } from "@/utils/messageStatus";
+import { useChat } from "@/context/ChatContext";
 
 interface ChatWindowProps {
   chatId: string;
@@ -36,6 +37,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const messageInputRef = useRef<HTMLInputElement>(null);
   const currentUser = useAppSelector((state) => state.auth.user);
   const { theme } = useTheme();
+  const { activeChat } = useChat();
 
   // Use SignalR hook for real-time messaging
   const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage } = useSignalR(chatId, currentUser?.id);
@@ -247,8 +249,19 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     { icon: FileText, label: "Document", color: "text-theme-purple-500" },
   ];
 
-  // Get display name for the chat (this would ideally come from the chat context or props)
-  const chatDisplayName = "Chat"; // TODO: Get from chat context or props
+  const chatDisplayName = activeChat?.name || "Chat";
+  const isGroupChat = !!activeChat?.isGroupChat;
+
+  // Live SignalR messages only carry senderId, not a nested sender object —
+  // fall back to the participant list the sidebar already fetched.
+  const participantNames = useMemo(() => {
+    const map = new Map<string, string>();
+    activeChat?.participants?.forEach((p) => map.set(p.id, p.displayName));
+    return map;
+  }, [activeChat]);
+
+  const getSenderName = (msg: ChatMessage): string =>
+    msg.sender?.displayName || participantNames.get(msg.senderId) || "Unknown";
 
   const bubbleRadius = (isOwn: boolean, isFirstInGroup: boolean) => {
     if (isOwn) {
@@ -387,6 +400,11 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                               : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
                           }`}
                         >
+                          {isGroupChat && !isOwn && isFirstInGroup && (
+                            <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
+                              {getSenderName(msg)}
+                            </p>
+                          )}
                           <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
                           <div className="mt-1 flex items-center justify-end gap-1">
                             <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
