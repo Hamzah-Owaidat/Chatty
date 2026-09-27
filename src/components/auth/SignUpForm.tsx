@@ -8,10 +8,11 @@ import { Button } from "lebify-ui";
 import Link from "next/link";
 import React, { useState } from "react";
 import { register } from "@/lib/api/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { RegisterData } from "@/types/auth/auth.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
+import { getSafeRedirect } from "@/utils/redirect";
 import ThemeResponsiveLogo from "@/components/common/ThemeResponsiveLogo";
 
 interface SignUpFormErrors {
@@ -36,6 +37,7 @@ const ErrorRow = ({ message }: { message: string }) => (
 
 export default function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
   const [formData, setFormData] = useState({
@@ -89,13 +91,20 @@ export default function SignUpForm() {
     try {
       const data = await register(formData as RegisterData);
       localStorage.setItem("token", data.token);
-      router.push("/auth/signin");
+      router.push(signInHref);
     } catch (err) {
       showToast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
+
+  // Registration doesn't auto-login (see handleSubmit) — carry any `?redirect=` through
+  // to the sign-in page so it isn't lost when they land there next.
+  const redirectParam = getSafeRedirect(searchParams.get("redirect"), "");
+  const signInHref = redirectParam
+    ? `/auth/signin?redirect=${encodeURIComponent(redirectParam)}`
+    : "/auth/signin";
 
   // Presentational-only strength meter driven by the existing password pattern's rules.
   const pwd = formData.password;
@@ -325,7 +334,7 @@ export default function SignUpForm() {
               <p className="text-sm font-normal text-center text-gray-700 dark:text-gray-400 sm:text-start">
                 Already have an account?{" "}
                 <Link
-                  href="/auth/signin"
+                  href={signInHref}
                   className="text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]"
                 >
                   Sign In

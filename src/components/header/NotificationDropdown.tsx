@@ -1,13 +1,15 @@
 "use client";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
-import { Check, X } from "lucide-react";
+import { HubConnection } from "@microsoft/signalr";
+import { Check, X, Users } from "lucide-react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { getIncomingRequests, acceptChatRequest, rejectChatRequest } from "@/lib/api/chatRequest";
 import { ChatRequestDto } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useChat } from "@/context/ChatContext";
+import { startSignalRConnection } from "@/lib/signalr/signalr";
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -32,6 +34,38 @@ export default function NotificationDropdown() {
     fetchIncoming();
   }, []);
 
+  // Live: a group invite (or a new direct request) sent to us shows up here right
+  // away instead of only appearing the next time the dropdown is opened.
+  useEffect(() => {
+    let isMounted = true;
+    let conn: HubConnection | null = null;
+    let handleGroupInvite: ((dto: ChatRequestDto) => void) | null = null;
+
+    const attach = async () => {
+      try {
+        conn = await startSignalRConnection();
+        if (!isMounted) return;
+
+        handleGroupInvite = (dto: ChatRequestDto) => {
+          setRequests((prev) => (prev.some((r) => r.id === dto.id) ? prev : [dto, ...prev]));
+        };
+
+        conn.on("GroupInviteReceived", handleGroupInvite);
+      } catch (err) {
+        console.error("Failed to attach GroupInviteReceived listener:", err);
+      }
+    };
+
+    attach();
+
+    return () => {
+      isMounted = false;
+      if (conn && handleGroupInvite) {
+        conn.off("GroupInviteReceived", handleGroupInvite);
+      }
+    };
+  }, []);
+
   function toggleDropdown() {
     setIsOpen((prev) => {
       const next = !prev;
@@ -48,7 +82,11 @@ export default function NotificationDropdown() {
     setActingOnId(request.id);
     try {
       await acceptChatRequest(request.id);
-      showToast.success(`You're now chatting with ${request.sender.displayName}`);
+      showToast.success(
+        request.chatId
+          ? `You've joined ${request.chatName || "the group"}`
+          : `You're now chatting with ${request.sender.displayName}`
+      );
       setRequests((prev) => prev.filter((r) => r.id !== request.id));
       refreshChatList();
     } catch (err) {
@@ -136,17 +174,26 @@ export default function NotificationDropdown() {
               No pending chat requests
             </li>
           ) : (
-            requests.map((request) => (
+            requests.map((request) => {
+              const isGroupInvite = !!request.chatId;
+
+              return (
               <li key={request.id}>
                 <div className="flex items-center gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 dark:border-gray-800">
                   <span className="relative block h-10 w-10 shrink-0 rounded-full">
-                    <Image
-                      width={40}
-                      height={40}
-                      src={request.sender.image || "/images/user/user-01.jpg"}
-                      alt={request.sender.displayName}
-                      className="w-full overflow-hidden rounded-full object-cover"
-                    />
+                    {isGroupInvite && !request.chatImage ? (
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1a7b9b]/10 text-[#1a7b9b] dark:bg-[#2596bb]/15 dark:text-[#60c7e3]">
+                        <Users size={18} />
+                      </span>
+                    ) : (
+                      <Image
+                        width={40}
+                        height={40}
+                        src={(isGroupInvite ? request.chatImage : request.sender.image) || "/images/user/user-01.jpg"}
+                        alt={isGroupInvite ? request.chatName || "Group" : request.sender.displayName}
+                        className="w-full overflow-hidden rounded-full object-cover"
+                      />
+                    )}
                   </span>
 
                   <span className="min-w-0 flex-1">
@@ -154,7 +201,16 @@ export default function NotificationDropdown() {
                       <span className="font-medium text-gray-800 dark:text-white/90">
                         {request.sender.displayName}
                       </span>{" "}
-                      wants to start a chat
+                      {isGroupInvite ? (
+                        <>
+                          invited you to join{" "}
+                          <span className="font-medium text-gray-800 dark:text-white/90">
+                            {request.chatName || "a group"}
+                          </span>
+                        </>
+                      ) : (
+                        "wants to start a chat"
+                      )}
                     </span>
                   </span>
 
@@ -178,7 +234,8 @@ export default function NotificationDropdown() {
                   </span>
                 </div>
               </li>
-            ))
+              );
+            })
           )}
         </ul>
       </Dropdown>

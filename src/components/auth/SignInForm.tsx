@@ -7,13 +7,14 @@ import { EyeCloseIcon, EyeIcon } from "@/icons";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loginUser } from "@/store/slices/authSlice";
 import { unwrapResult } from "@reduxjs/toolkit";
 import { getErrorMessage } from "@/utils/error";
 import { LoginCredentials } from "@/types/auth/auth.models";
 import { showToast } from "@/utils/toast";
+import { getSafeRedirect } from "@/utils/redirect";
 import Image from "next/image";
 
 interface SignInFormErrors {
@@ -31,6 +32,7 @@ export default function SignInForm() {
   const [errors, setErrors] = useState<SignInFormErrors>({});
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const { status } = useAppSelector((s) => s.auth);
 
@@ -56,7 +58,7 @@ export default function SignInForm() {
       const result = unwrapResult(action);
       console.log("Logged in user:", result?.user);
       showToast.success("Logged in successfully!");
-      router.push("/chat");
+      router.push(getSafeRedirect(searchParams.get("redirect"), "/chat"));
     } catch (err) {
       showToast.error(getErrorMessage(err));
     }

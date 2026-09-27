@@ -97,6 +97,7 @@ export const useSignalR = (chatId: string | null, currentUserId?: string) => {
                 sentAt: message.sentAt || message.createdAt || message.timestamp,
                 timestamp: message.sentAt || message.createdAt || message.timestamp,
                 status: normalizeMessageStatus(message.status),
+                type: message.type,
                 sender: message.sender,
                 chat: message.chat,
               };
@@ -145,25 +146,23 @@ export const useSignalR = (chatId: string | null, currentUserId?: string) => {
             }
           };
 
-          // Someone else marked the open chat as read — flip our own sent bubbles to "seen"
-          // for every message that was sent at or before their lastReadAt.
+          // Flip a sent bubble to "seen" only once every participant has read it —
+          // readMessageIds is authoritative (backed by each message's ReadByUserIds vs.
+          // the chat's participant count), unlike guessing from a single reader's
+          // lastReadAt, which would flip a group message "seen" the moment just one of
+          // several participants opened the chat.
           handleMessagesUpdated = (dto: MessageUpdatedDto) => {
             console.log('👀 MessagesUpdated received:', dto);
             const currentChatId = chatIdRef.current;
-            const myId = currentUserIdRef.current;
             if (!dto || dto.chatId !== currentChatId) return;
-            if (myId && dto.userId === myId) return; // our own read echoing back
 
-            const lastReadAt = dto.lastReadAt ? new Date(dto.lastReadAt).getTime() : NaN;
-            if (Number.isNaN(lastReadAt)) return;
+            const readIds = dto.readMessageIds;
+            if (!readIds || readIds.length === 0) return;
 
             if (isMounted) {
+              const readIdSet = new Set(readIds);
               setMessages((prev) =>
-                prev.map((m) => {
-                  if (!myId || m.senderId !== myId || m.status === 'seen') return m;
-                  const sentTime = new Date(m.sentAt || m.timestamp || m.createdAt || 0).getTime();
-                  return sentTime <= lastReadAt ? { ...m, status: 'seen' } : m;
-                })
+                prev.map((m) => (m.status !== 'seen' && readIdSet.has(m.id) ? { ...m, status: 'seen' } : m))
               );
             }
           };

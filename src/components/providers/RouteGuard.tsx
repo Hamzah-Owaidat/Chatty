@@ -13,6 +13,8 @@ interface RouteGuardProps {
  * Global route guard.
  * - If user has no token, redirects to /auth/signin.
  * - Auth routes (/auth/...) remain publicly accessible.
+ * - Invite links (/invite/...) remain publicly accessible too, so an unauthenticated
+ *   visitor can see who invited them before being sent to sign in/up.
  */
 export default function RouteGuard({ children }: RouteGuardProps) {
   const { token, initialized } = useAppSelector((state) => state.auth);
@@ -25,16 +27,16 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     setMounted(true);
   }, []);
 
-  const isAuthRoute = pathname?.startsWith("/auth");
+  const isPublicRoute = pathname?.startsWith("/auth") || pathname?.startsWith("/invite");
 
   useEffect(() => {
     if (!mounted || !initialized) return;
 
-    // If not on an auth route and no token, redirect to signin
-    if (!isAuthRoute && !token) {
+    // If not on a public route and no token, redirect to signin
+    if (!isPublicRoute && !token) {
       router.replace("/auth/signin");
     }
-  }, [mounted, initialized, isAuthRoute, token, router]);
+  }, [mounted, initialized, isPublicRoute, token, router]);
 
   // While initializing or before mount, show a loader
   if (!mounted || !initialized) {
@@ -42,7 +44,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
   }
 
   // While redirecting away from protected routes, render nothing
-  if (!isAuthRoute && !token) {
+  if (!isPublicRoute && !token) {
     return null;
   }
 

@@ -8,9 +8,11 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` };
 }
 
-export async function sendChatRequest(receiverUserId: string): Promise<void> {
+// chatId invites receiverUserId into that existing group chat instead of sending a
+// direct 1:1 request — only that chat's admin may do this.
+export async function sendChatRequest(receiverUserId: string, chatId?: string): Promise<void> {
   try {
-    await api.post('/chat-requests', { receiverUserId }, { headers: authHeaders() });
+    await api.post('/chat-requests', { receiverUserId, chatId }, { headers: authHeaders() });
   } catch (err: any) {
     if (err.response?.data) {
       throw err.response.data;
