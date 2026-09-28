@@ -325,7 +325,22 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     if (!timestamp) return "";
     try {
       const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const now = new Date();
+      const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      if (date.toDateString() === now.toDateString()) return time;
+
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+
+      const sameYear = date.getFullYear() === now.getFullYear();
+      const dateLabel = date.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: sameYear ? undefined : "numeric",
+      });
+      return `${dateLabel}, ${time}`;
     } catch {
       return timestamp;
     }
