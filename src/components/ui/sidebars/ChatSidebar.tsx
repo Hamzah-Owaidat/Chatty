@@ -1,21 +1,28 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HubConnection } from "@microsoft/signalr";
 import { useSidebar } from "../../../context/SidebarContext";
 import { Search, Plus, MessageSquarePlus, UsersRound, Link2 } from "lucide-react";
 import { useChat } from "@/context/ChatContext";
 import { getUserChats } from "@/lib/api/chat";
-import { UserChat, ChatParticipant } from "@/types/chat/chat.models";
+import { UserChat, ChatParticipant, ParticipantRemovedDto } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useAppSelector } from "@/store/hooks";
 import { startSignalRConnection } from "@/lib/signalr/signalr";
+import { usePresence } from "@/hooks/usePresence";
+import { useChatActivity } from "@/hooks/useChatActivity";
+import { getActivityLabel } from "@/utils/chatActivity";
+import { formatRelativeTime } from "@/utils/time";
+import { useNow } from "@/hooks/useNow";
 import { Dropdown } from "../dropdown/Dropdown";
 import { DropdownItem } from "../dropdown/DropdownItem";
 import { useModal } from "@/hooks/useModal";
 import NewChatModal from "@/components/common/NewChatModal";
 import NewGroupModal from "@/components/common/NewGroupModal";
+import InviteLinkModal from "@/components/common/InviteLinkModal";
 
 interface ChatUserDisplay {
   id: string;
@@ -23,9 +30,13 @@ interface ChatUserDisplay {
   avatar: string;
   status: "online" | "offline" | "away";
   lastMessage: string;
-  lastTime: string;
+  // Raw timestamp — formatted to "2m ago" etc. at render time (see resolveLastTime),
+  // so it keeps ticking forward instead of freezing at whatever it read on fetch.
+  lastTimeRaw?: string;
   unread: number;
   isGroupChat: boolean;
+  groupImage?: string | null;
+  adminIds?: string[];
   participants: ChatParticipant[];
 }
 
@@ -39,32 +50,29 @@ const ChatSidebar = () => {
   const [chats, setChats] = useState<ChatUserDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-  const { setActiveUserId, setActiveChat, chatListVersion } = useChat();
+  const { activeChat, setActiveUserId, setActiveChat, chatListVersion } = useChat();
   const currentUser = useAppSelector((state) => state.auth.user);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const newChatModal = useModal();
   const newGroupModal = useModal();
+  const inviteLinkModal = useModal();
+  const presence = usePresence();
+  const chatActivity = useChatActivity();
+  // Ticks a re-render every 30s so "just now" / "16m ago" stay live without a refresh.
+  useNow(30000);
+
+  // Read inside the mount-once ParticipantRemoved listener below without making it re-attach.
+  const currentUserIdRef = useRef<string | undefined>(currentUser?.id);
+  const activeChatIdRef = useRef<string | undefined>(activeChat?.id);
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id;
+  }, [currentUser?.id]);
+  useEffect(() => {
+    activeChatIdRef.current = activeChat?.id;
+  }, [activeChat?.id]);
 
   const showFull = isExpanded || isHovered || isMobileOpen;
-
-  // Helper function to format time (e.g., "2m ago", "10m ago", "2d ago")
-  const formatTime = (timestamp?: string): string => {
-    if (!timestamp) return "";
-
-    try {
-      const date = new Date(timestamp);
-      const now = new Date();
-      const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-      if (diffInSeconds < 60) return "just now";
-      if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-      if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-      if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-
-      return date.toLocaleDateString();
-    } catch {
-      return timestamp;
-    }
-  };
 
   // Helper to ensure lastMessage is always a string
   const ensureStringMessage = (message: any): string => {
@@ -95,8 +103,9 @@ const ChatSidebar = () => {
     const otherParticipant = chat.participants?.[0];
 
     if (chatInfo?.isGroupChat) {
-      // Group chat: use group name
+      // Group chat: use group name (and image, if one was set)
       name = chatInfo.groupName || `Group ${chatInfo.id.slice(-6)}`;
+      avatar = chatInfo.groupImage || avatar;
     } else if (otherParticipant) {
       // Direct chat: use the other participant's info
       name = otherParticipant.displayName || "Unknown User";
@@ -109,13 +118,17 @@ const ChatSidebar = () => {
       id: chat.chatId,
       name: name,
       avatar: avatar,
-      status: chat.status || "offline",
+      // Group chats have no single "other user" to show a status for — direct
+      // chats use the fetched baseline; live updates are overlaid at render time.
+      status: !chatInfo?.isGroupChat ? otherParticipant?.status || "offline" : "offline",
       lastMessage: ensureStringMessage(chatInfo?.lastMessage),
-      lastTime: chatInfo?.lastMessageAt && chatInfo.lastMessageAt !== "0001-01-01T00:00:00Z"
-        ? formatTime(chatInfo.lastMessageAt)
-        : formatTime(chatInfo?.createdAt || chat.joinedAt),
+      lastTimeRaw: chatInfo?.lastMessageAt && chatInfo.lastMessageAt !== "0001-01-01T00:00:00Z"
+        ? chatInfo.lastMessageAt
+        : (chatInfo?.createdAt || chat.joinedAt),
       unread: chat.unreadMessagesCount || 0,
       isGroupChat: !!chatInfo?.isGroupChat,
+      groupImage: chatInfo?.groupImage,
+      adminIds: chatInfo?.adminIds,
       participants: chat.participants || [],
     };
   };
@@ -134,7 +147,20 @@ const ChatSidebar = () => {
           return;
         }
 
-        setChats(userChats.map(transformChat));
+        const transformed = userChats.map(transformChat);
+        setChats(transformed);
+
+        // Landed here from an invite-link accept (or any other "open this chat" deep
+        // link) — auto-select it once the list has loaded, then drop the param so a
+        // later refresh doesn't keep re-selecting it.
+        const targetChatId = searchParams.get("chatId");
+        if (targetChatId) {
+          const target = transformed.find((c) => c.id === targetChatId);
+          if (target) {
+            handleUserClick(target);
+          }
+          router.replace("/chat");
+        }
       } catch (err) {
         console.error("Error fetching chats:", err);
         showToast.error(getErrorMessage(err));
@@ -145,8 +171,9 @@ const ChatSidebar = () => {
     };
 
     fetchChats();
-    // transformChat is a pure render-scoped helper — refetch only when asked to
-    // (chatListVersion bumps after creating/accepting a chat elsewhere in the tree).
+    // transformChat/handleUserClick/searchParams/router are stable enough here —
+    // refetch only when asked to (chatListVersion bumps after creating/accepting a
+    // chat elsewhere in the tree).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatListVersion]);
 
@@ -157,6 +184,7 @@ const ChatSidebar = () => {
     let isMounted = true;
     let conn: HubConnection | null = null;
     let handleChatStateUpdated: ((dto: UserChat) => void) | null = null;
+    let handleParticipantRemoved: ((dto: ParticipantRemovedDto) => void) | null = null;
 
     const attach = async () => {
       try {
@@ -165,18 +193,30 @@ const ChatSidebar = () => {
 
         handleChatStateUpdated = (dto: UserChat) => {
           setChats((prev) => {
-            const idx = prev.findIndex((c) => c.id === dto.chatId);
             const transformed = transformChat(dto);
-            // Not in the list yet — a chat we were just added to (request accepted,
-            // added to a group) — add it instead of dropping the event.
-            if (idx === -1) return [...prev, transformed];
-            const next = [...prev];
-            next[idx] = transformed;
-            return next;
+            // A new message (or a read) just touched this chat — bring it to the top,
+            // same as the backend's own most-recently-active ordering, instead of
+            // patching it in place where it could stay scrolled out of view.
+            const rest = prev.filter((c) => c.id !== dto.chatId);
+            return [transformed, ...rest];
           });
         };
 
+        // When someone else is removed the remaining participants get a fresh
+        // ChatStateUpdated (handled above); the removed user doesn't, so drop the
+        // chat from our own list only when we were the one removed.
+        handleParticipantRemoved = (dto: ParticipantRemovedDto) => {
+          if (dto.userId !== currentUserIdRef.current) return;
+          setChats((prev) => prev.filter((c) => c.id !== dto.chatId));
+          if (activeChatIdRef.current === dto.chatId) {
+            setActiveChat(null);
+            setActiveUserId(null);
+            setSelectedUserId(null);
+          }
+        };
+
         conn.on("ChatStateUpdated", handleChatStateUpdated);
+        conn.on("ParticipantRemoved", handleParticipantRemoved);
       } catch (err) {
         console.error("Failed to attach ChatStateUpdated listener:", err);
       }
@@ -186,16 +226,26 @@ const ChatSidebar = () => {
 
     return () => {
       isMounted = false;
-      // Only detach our own listener — the connection is a shared singleton that
+      // Only detach our own listeners — the connection is a shared singleton that
       // ChatWindow may still be using, so it isn't ours to stop here.
       if (conn && handleChatStateUpdated) {
         conn.off("ChatStateUpdated", handleChatStateUpdated);
+      }
+      if (conn && handleParticipantRemoved) {
+        conn.off("ParticipantRemoved", handleParticipantRemoved);
       }
     };
     // transformChat is a pure render-scoped helper (no closures over changing state);
     // this effect intentionally attaches once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Overlays a live UserStatusChanged update (keyed by the other participant's
+  // userId) on top of the status fetched when the sidebar loaded.
+  const resolveStatus = (user: ChatUserDisplay): ChatUserDisplay["status"] => {
+    const otherId = !user.isGroupChat ? user.participants?.[0]?.id : undefined;
+    return (otherId && presence[otherId]?.status) || user.status;
+  };
 
   const handleUserClick = (user: ChatUserDisplay) => {
     setSelectedUserId(user.id);
@@ -204,8 +254,10 @@ const ChatSidebar = () => {
       id: user.id,
       name: user.name,
       avatar: user.avatar,
-      status: user.status,
+      status: resolveStatus(user),
       isGroupChat: user.isGroupChat,
+      groupImage: user.groupImage,
+      adminIds: user.adminIds,
       participants: user.participants,
     });
   };
@@ -237,7 +289,12 @@ const ChatSidebar = () => {
   const statusDotClass = (status: ChatUserDisplay["status"]) =>
     status === "online" ? "bg-success-500 dark:bg-success-400" : status === "away" ? "bg-warning-400" : "bg-gray-400 dark:bg-stone-500";
 
-  const renderUserItem = (user: ChatUserDisplay, index: number) => (
+  const renderUserItem = (user: ChatUserDisplay, index: number) => {
+    const status = resolveStatus(user);
+    const rowActivity = chatActivity[user.id];
+    const lastTime = formatRelativeTime(user.lastTimeRaw);
+
+    return (
     <li key={user.id} className="mb-1.5">
       <button
         onClick={() => handleUserClick(user)}
@@ -258,14 +315,18 @@ const ChatSidebar = () => {
             alt={user.name}
             width={48}
             height={48}
-            className={`rounded-full object-cover ${statusRingClass(user.status)}`}
+            className={`rounded-full object-cover ${user.isGroupChat ? "" : statusRingClass(status)}`}
           />
-          <span className="absolute bottom-0 right-0 flex h-3 w-3">
-            {user.status === "online" && (
-              <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
-            )}
-            <span className={`relative h-3 w-3 rounded-full border-2 border-white dark:border-[#201d1b] ${statusDotClass(user.status)}`} />
-          </span>
+          {/* Groups have no single peer to be "online" — the presence dot only makes
+              sense for a direct chat. */}
+          {!user.isGroupChat && (
+            <span className="absolute bottom-0 right-0 flex h-3 w-3">
+              {status === "online" && (
+                <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
+              )}
+              <span className={`relative h-3 w-3 rounded-full border-2 border-white dark:border-[#201d1b] ${statusDotClass(status)}`} />
+            </span>
+          )}
         </div>
 
         {showFull && (
@@ -275,12 +336,23 @@ const ChatSidebar = () => {
                 {user.name}
               </span>
               <span className="shrink-0 text-[11px] text-gray-500 dark:text-stone-400">
-                {user.lastTime}
+                {lastTime}
               </span>
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">
-              <p className="max-w-[9rem] truncate text-xs text-gray-500 dark:text-stone-400">
-                {user.lastMessage}
+              <p
+                className={`max-w-[9rem] truncate text-xs ${
+                  rowActivity ? "italic text-[#1a7b9b] dark:text-[#60c7e3]" : "text-gray-500 dark:text-stone-400"
+                }`}
+              >
+                {rowActivity
+                  ? getActivityLabel(
+                      rowActivity.activityType,
+                      user.isGroupChat
+                        ? user.participants.find((p) => p.id === rowActivity.userId)?.displayName
+                        : undefined
+                    )
+                  : user.lastMessage}
               </p>
               {user.unread > 0 && (
                 <span className="animate-badge-glow flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1a7b9b] px-1.5 text-[11px] font-semibold text-white dark:bg-[#2596bb]">
@@ -299,7 +371,8 @@ const ChatSidebar = () => {
         )}
       </button>
     </li>
-  );
+    );
+  };
 
   const renderSkeletonRow = (key: number) => (
     <li key={key} className="mb-1.5 flex items-center gap-3 p-3">
@@ -404,7 +477,10 @@ const ChatSidebar = () => {
                   New group
                 </DropdownItem>
                 <DropdownItem
-                  onItemClick={() => setIsAddMenuOpen(false)}
+                  onItemClick={() => {
+                    setIsAddMenuOpen(false);
+                    inviteLinkModal.openModal();
+                  }}
                   baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
                 >
                   <Link2 size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
@@ -430,6 +506,7 @@ const ChatSidebar = () => {
 
       <NewChatModal isOpen={newChatModal.isOpen} onClose={newChatModal.closeModal} />
       <NewGroupModal isOpen={newGroupModal.isOpen} onClose={newGroupModal.closeModal} />
+      <InviteLinkModal isOpen={inviteLinkModal.isOpen} onClose={inviteLinkModal.closeModal} />
     </>
   );
 };

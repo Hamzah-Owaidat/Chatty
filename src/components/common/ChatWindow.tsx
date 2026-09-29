@@ -1,18 +1,27 @@
 "use client";
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import NextImage from "next/image";
 import { Send, Paperclip, Mic, Image, FileText, Camera, Check, CheckCheck, Phone, EllipsisVertical, Info, Trash2, XCircle, Search, Smile, ChevronDown } from "lucide-react";
 import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from "emoji-picker-react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useSignalR } from "@/hooks/useSignalR";
+import { usePresence } from "@/hooks/usePresence";
+import { useChatActivity } from "@/hooks/useChatActivity";
+import { getActivityLabel } from "@/utils/chatActivity";
+import { formatRelativeTime, dayKey, formatDayDivider } from "@/utils/time";
+import { useNow } from "@/hooks/useNow";
+import { HubConnectionState } from "@microsoft/signalr";
 import { getMessages } from "@/lib/api/message";
-import { ChatMessage } from "@/types/chat/chat.models";
+import { ChatMessage, ChatParticipant, ParticipantAddedDto, ParticipantRemovedDto, ChatDetailsUpdatedDto, BackendMessageType } from "@/types/chat/chat.models";
 import { useAppSelector } from "@/store/hooks";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useTheme } from "@/context/ThemeContext";
 import { normalizeMessageStatus } from "@/utils/messageStatus";
 import { useChat } from "@/context/ChatContext";
+import { useModal } from "@/hooks/useModal";
+import GroupInfoModal from "./GroupInfoModal";
 
 interface ChatWindowProps {
   chatId: string;
@@ -28,19 +37,42 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [sending, setSending] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [unseenCount, setUnseenCount] = useState(0);
-  // Reserved for a future "peer is typing" SignalR event — presentational only, never set today.
-  const [isPeerTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const lastMessageCountRef = useRef(0);
+  const lastActivitySentAtRef = useRef(0);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const currentUser = useAppSelector((state) => state.auth.user);
   const { theme } = useTheme();
-  const { activeChat } = useChat();
+  const { activeChat, setActiveChat } = useChat();
+  const groupInfoModal = useModal();
 
   // Use SignalR hook for real-time messaging
-  const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage } = useSignalR(chatId, currentUser?.id);
+  const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage, connection } = useSignalR(chatId, currentUser?.id);
+  const presence = usePresence();
+  const chatActivity = useChatActivity();
+  // Ticks a re-render every 30s so "Last seen Xm ago" stays live without a refresh.
+  useNow(30000);
+
+  // Any activity entry for this chatId is necessarily from the other participant —
+  // the server excludes the sender from its own broadcast recipients.
+  const peerActivity = chatActivity[chatId];
+  const isPeerTyping = !!peerActivity;
+
+  const ACTIVITY_THROTTLE_MS = 2000;
+
+  const notifyTyping = () => {
+    if (!connection || connection.state !== HubConnectionState.Connected || !chatId) return;
+
+    const now = Date.now();
+    if (now - lastActivitySentAtRef.current < ACTIVITY_THROTTLE_MS) return;
+    lastActivitySentAtRef.current = now;
+
+    connection.invoke("SendActivity", chatId, "typing").catch((err) => {
+      console.error("Failed to send typing activity:", err);
+    });
+  };
 
   // Helper to ensure content is always a string
   const ensureStringContent = (content: any): string => {
@@ -78,6 +110,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             createdAt: msg.createdAt,
             isRead: msg.isRead,
             status: normalizeMessageStatus(msg.status),
+            type: msg.type,
             // Keep nested objects for future use
             sender: msg.sender,
             chat: msg.chat,
@@ -102,6 +135,69 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     }
   }, [chatId, setMessages]);
 
+  // Live: reflect another admin's participant/detail changes for this chat while it's
+  // open, without needing a refetch. (Our own changes, made via GroupInfoModal, are
+  // already applied locally the moment the API call succeeds.)
+  useEffect(() => {
+    if (!connection || !chatId) return;
+
+    // Functional updates throughout — two of these events can arrive back-to-back
+    // before React re-runs this effect, and each handler otherwise closes over the
+    // same stale `activeChat` snapshot. Building the next state from `prev` (the
+    // actual latest state at apply time) instead of that snapshot means the second
+    // update can't clobber the first one's change.
+    const handleParticipantAdded = (dto: ParticipantAddedDto) => {
+      if (dto.chatId !== chatId || dto.participant.id === currentUser?.id) return;
+      setActiveChat((prev) =>
+        prev
+          ? {
+              ...prev,
+              participants: [
+                ...(prev.participants || []).filter((p) => p.id !== dto.participant.id),
+                dto.participant,
+              ],
+            }
+          : prev
+      );
+    };
+
+    const handleParticipantRemoved = (dto: ParticipantRemovedDto) => {
+      if (dto.chatId !== chatId) return;
+      setActiveChat((prev) =>
+        prev
+          ? { ...prev, participants: (prev.participants || []).filter((p) => p.id !== dto.userId) }
+          : prev
+      );
+    };
+
+    const handleChatUpdated = (dto: ChatDetailsUpdatedDto) => {
+      if (dto.chatId !== chatId) return;
+      setActiveChat((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: dto.groupName || prev.name,
+              groupImage: dto.groupImage,
+              avatar: dto.groupImage || prev.avatar,
+            }
+          : prev
+      );
+    };
+
+    connection.on("ParticipantAdded", handleParticipantAdded);
+    connection.on("ParticipantRemoved", handleParticipantRemoved);
+    connection.on("ChatUpdated", handleChatUpdated);
+
+    return () => {
+      connection.off("ParticipantAdded", handleParticipantAdded);
+      connection.off("ParticipantRemoved", handleParticipantRemoved);
+      connection.off("ChatUpdated", handleChatUpdated);
+    };
+    // Deliberately not depending on `activeChat` — the handlers above read/merge
+    // via the functional setter form, not this closure, so re-subscribing on every
+    // content change (name, participants, ...) would just be wasted churn.
+  }, [connection, chatId, currentUser?.id, setActiveChat]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -115,6 +211,14 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     }
     lastMessageCountRef.current = messages.length;
   }, [messages, isAtBottom]);
+
+  // Reveal the typing bubble the same way new messages are revealed — only when
+  // already at the bottom, so it doesn't yank someone away from older history.
+  useEffect(() => {
+    if (isPeerTyping && isAtBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [isPeerTyping, isAtBottom]);
 
   const handleMessageListScroll = () => {
     const el = messageListRef.current;
@@ -224,6 +328,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     setMessage((prev) => prev + emojiData.emoji);
+    notifyTyping();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -237,7 +342,22 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     if (!timestamp) return "";
     try {
       const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const now = new Date();
+      const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      if (date.toDateString() === now.toDateString()) return time;
+
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+
+      const sameYear = date.getFullYear() === now.getFullYear();
+      const dateLabel = date.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: sameYear ? undefined : "numeric",
+      });
+      return `${dateLabel}, ${time}`;
     } catch {
       return timestamp;
     }
@@ -252,16 +372,53 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const chatDisplayName = activeChat?.name || "Chat";
   const isGroupChat = !!activeChat?.isGroupChat;
 
+  // Group chats have no single "other user" to show a status for. For direct
+  // chats, prefer the live UserStatusChanged value; fall back to whatever the
+  // sidebar had fetched when this chat was opened.
+  const otherParticipantId = !isGroupChat ? activeChat?.participants?.[0]?.id : undefined;
+  const peerPresence = otherParticipantId ? presence[otherParticipantId] : undefined;
+  const peerStatus = peerPresence?.status ?? activeChat?.status;
+  const isPeerOnline = peerStatus === "online";
+  const peerLastSeenAt = peerPresence?.lastSeenAt ?? activeChat?.participants?.[0]?.lastSeenAt;
+  const peerStatusLabel = !isGroupChat && peerActivity
+    ? getActivityLabel(peerActivity.activityType)
+    : isPeerOnline
+      ? "Online"
+      : peerLastSeenAt
+        ? `Last seen ${formatRelativeTime(peerLastSeenAt)}`
+        : "Offline";
+
   // Live SignalR messages only carry senderId, not a nested sender object —
   // fall back to the participant list the sidebar already fetched.
-  const participantNames = useMemo(() => {
-    const map = new Map<string, string>();
-    activeChat?.participants?.forEach((p) => map.set(p.id, p.displayName));
+  const participantsById = useMemo(() => {
+    const map = new Map<string, ChatParticipant>();
+    activeChat?.participants?.forEach((p) => map.set(p.id, p));
     return map;
   }, [activeChat]);
 
+  const participantNames = useMemo(() => {
+    const map = new Map<string, string>();
+    participantsById.forEach((p, id) => map.set(id, p.displayName));
+    return map;
+  }, [participantsById]);
+
+  // A group has no single peer to report a status for — only surface something
+  // when someone's actually typing, and name them since there's no single "the
+  // other person" to imply it.
+  const groupActivityLabel = isGroupChat && peerActivity
+    ? getActivityLabel(peerActivity.activityType, participantNames.get(peerActivity.userId))
+    : null;
+
   const getSenderName = (msg: ChatMessage): string =>
     msg.sender?.displayName || participantNames.get(msg.senderId) || "Unknown";
+
+  // In a group, each message should show its own sender's picture — prefer the
+  // nested sender object a REST-fetched message carries, falling back to the
+  // participant list for live SignalR messages (which only carry a senderId). In
+  // a direct chat there's only ever one possible "other" sender — the peer
+  // already known to the chat header.
+  const getSenderAvatar = (senderId: string, sender?: { image?: string } | null): string | undefined =>
+    isGroupChat ? sender?.image || participantsById.get(senderId)?.image : activeChat?.avatar;
 
   const bubbleRadius = (isOwn: boolean, isFirstInGroup: boolean) => {
     if (isOwn) {
@@ -283,7 +440,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]">
               {chatDisplayName?.charAt(0) || "C"}
             </div>
-            {isConnected && (
+            {!isGroupChat && isPeerOnline && (
               <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
                 <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
                 <span className="relative h-3.5 w-3.5 rounded-full border-2 border-white bg-success-500 dark:border-[#201d1b] dark:bg-success-400" />
@@ -294,9 +451,15 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             <span className="block font-semibold text-gray-800 dark:text-gray-100">
               {chatDisplayName}
             </span>
-            <span className={`text-xs ${isConnected ? "text-success-600 dark:text-success-400" : "text-gray-400 dark:text-stone-500"}`}>
-              {isConnected ? "Online" : "Connecting..."}
-            </span>
+            {isGroupChat ? (
+              groupActivityLabel && (
+                <span className="text-xs italic text-[#1a7b9b] dark:text-[#60c7e3]">{groupActivityLabel}</span>
+              )
+            ) : (
+              <span className={`text-xs ${isPeerOnline ? "text-success-600 dark:text-success-400" : "text-gray-400 dark:text-stone-500"}`}>
+                {peerStatusLabel}
+              </span>
+            )}
           </div>
         </div>
 
@@ -324,9 +487,15 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               onClose={() => setIsDropdownOpen(false)}
               className={`flex w-[208px] origin-top-right animate-[floatIn_.18s_cubic-bezier(.2,.8,.2,1)_both] flex-col gap-0.5 rounded-2xl border border-gray-200/70 bg-white/90 p-1.5 shadow-[0_1px_2px_rgba(16,24,40,.04),0_20px_40px_-20px_rgba(16,24,40,.5)] backdrop-blur-md backdrop-saturate-150 dark:border-stone-800/70 dark:bg-stone-900/90`}
             >
-              <DropdownItem onItemClick={() => setIsDropdownOpen(false)} baseClassName={dropdownItemClass}>
+              <DropdownItem
+                onItemClick={() => {
+                  setIsDropdownOpen(false);
+                  if (isGroupChat) groupInfoModal.openModal();
+                }}
+                baseClassName={dropdownItemClass}
+              >
                 <Info className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
-                Contact Info
+                {isGroupChat ? "Group Info" : "Contact Info"}
               </DropdownItem>
               <DropdownItem onItemClick={() => setIsDropdownOpen(false)} baseClassName={dropdownItemClass}>
                 <Search className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
@@ -366,64 +535,105 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             </div>
           ) : (
             <>
-              <div className="mb-4 flex justify-center">
-                <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
-                  Today
-                </span>
-              </div>
-
               {messages.map((msg, index) => {
+                const msgTimestamp = msg.sentAt || msg.timestamp || msg.createdAt;
+                const prevTimestamp = index > 0
+                  ? messages[index - 1].sentAt || messages[index - 1].timestamp || messages[index - 1].createdAt
+                  : undefined;
+                const showDayDivider = index === 0 || dayKey(msgTimestamp) !== dayKey(prevTimestamp);
+
+                const dayDivider = showDayDivider && (
+                  <div className="mb-4 mt-2 flex justify-center first:mt-0">
+                    <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
+                      {formatDayDivider(msgTimestamp)}
+                    </span>
+                  </div>
+                );
+
+                if (msg.type === BackendMessageType.Alert) {
+                  return (
+                    <React.Fragment key={msg.id}>
+                      {dayDivider}
+                      <div className="my-3 flex justify-center">
+                        <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
+                          {ensureStringContent(msg.content)}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  );
+                }
+
                 const isOwn = msg.senderId === currentUser?.id;
-                const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
+                // A new day also restarts the sender grouping — same as WhatsApp, the
+                // name/avatar reappears after a day divider even mid-conversation.
+                const isFirstInGroup = showDayDivider || messages[index - 1].senderId !== msg.senderId;
+                const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
 
                 return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
-                  >
-                    <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                      {!isOwn && (
-                        <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
-                          {chatDisplayName?.charAt(0) || "U"}
-                        </div>
-                      )}
+                  <React.Fragment key={msg.id}>
+                    {dayDivider}
+                    <div
+                      className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
+                    >
+                      <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+                        {!isOwn && (
+                          <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
+                            {senderAvatar ? (
+                              <NextImage src={senderAvatar} alt={getSenderName(msg)} width={32} height={32} className="h-full w-full object-cover" />
+                            ) : (
+                              getSenderName(msg)?.charAt(0) || "U"
+                            )}
+                          </div>
+                        )}
 
-                      <div className="group relative">
-                        <div
-                          style={{
-                            borderRadius: bubbleRadius(isOwn, isFirstInGroup),
-                            animationDelay: `${Math.min(index, 8) * 40}ms`,
-                          }}
-                          className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
-                            isOwn
-                              ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
-                              : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
-                          }`}
-                        >
-                          {isGroupChat && !isOwn && isFirstInGroup && (
-                            <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
-                              {getSenderName(msg)}
-                            </p>
-                          )}
-                          <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
-                          <div className="mt-1 flex items-center justify-end gap-1">
-                            <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
-                              {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
-                            </span>
-                            {isOwn && <MessageStatus status={msg.status} />}
+                        <div className="group relative">
+                          <div
+                            style={{
+                              borderRadius: bubbleRadius(isOwn, isFirstInGroup),
+                              animationDelay: `${Math.min(index, 8) * 40}ms`,
+                            }}
+                            className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
+                              isOwn
+                                ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
+                                : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
+                            }`}
+                          >
+                            {isGroupChat && !isOwn && isFirstInGroup && (
+                              <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
+                                {getSenderName(msg)}
+                              </p>
+                            )}
+                            <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
+                            <div className="mt-1 flex items-center justify-end gap-1">
+                              <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
+                                {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
+                              </span>
+                              {isOwn && <MessageStatus status={msg.status} />}
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
 
               {isPeerTyping && (
                 <div className="mt-1 flex justify-start">
                   <div className="flex items-end gap-2">
-                    <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
-                      {chatDisplayName?.charAt(0) || "U"}
+                    <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
+                      {(() => {
+                        const typingAvatar = getSenderAvatar(peerActivity!.userId);
+                        const typingInitial = (isGroupChat
+                          ? participantNames.get(peerActivity!.userId)
+                          : chatDisplayName
+                        )?.charAt(0);
+                        return typingAvatar ? (
+                          <NextImage src={typingAvatar} alt="" width={32} height={32} className="h-full w-full object-cover" />
+                        ) : (
+                          typingInitial || "U"
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-1 rounded-[18px_18px_18px_6px] border border-gray-200/70 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524]">
                       <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0s" }} />
@@ -508,7 +718,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             ref={messageInputRef}
             type="text"
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              setMessage(e.target.value);
+              notifyTyping();
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             disabled={sending || !isConnected}
@@ -536,6 +749,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           </button>
         </div>
       </div>
+
+      {isGroupChat && (
+        <GroupInfoModal isOpen={groupInfoModal.isOpen} onClose={groupInfoModal.closeModal} chatId={chatId} />
+      )}
     </div>
   );
 }

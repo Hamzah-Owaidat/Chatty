@@ -43,3 +43,6 @@ Chatty.code-workspace
 
 docs
 
+# Claude Code
+.claude/
+

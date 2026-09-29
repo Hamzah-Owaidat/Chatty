@@ -20,6 +20,7 @@ const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 
 export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
   const [groupName, setGroupName] = useState("");
+  const [groupImage, setGroupImage] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ChatParticipant[]>([]);
   const [selected, setSelected] = useState<ChatParticipant[]>([]);
@@ -32,6 +33,7 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
   useEffect(() => {
     if (!isOpen) {
       setGroupName("");
+      setGroupImage("");
       setQuery("");
       setResults([]);
       setSelected([]);
@@ -75,20 +77,23 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
       showToast.error("Group name is required");
       return;
     }
-    if (selected.length < 2) {
-      showToast.error("Pick at least 2 other people for a group");
+    if (selected.length < 1) {
+      showToast.error("Pick at least 1 person to invite");
       return;
     }
 
     setCreating(true);
     try {
+      // Only the caller joins immediately (as admin) — everyone else selected gets
+      // sent a chat request and joins once they accept it.
       await createChat({
         isGroupChat: true,
         groupName: groupName.trim(),
+        groupImage: groupImage.trim() || undefined,
         participantsIds: [currentUser.id, ...selected.map((u) => u.id)],
         adminId: currentUser.id,
       });
-      showToast.success("Group created");
+      showToast.success("Group created — invites sent to the people you picked");
       refreshChatList();
       onClose();
     } catch (err) {
@@ -110,6 +115,14 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
         value={groupName}
         onChange={(e) => setGroupName(e.target.value)}
         placeholder="Group name"
+        className={`mb-3 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
+      />
+
+      <input
+        type="text"
+        value={groupImage}
+        onChange={(e) => setGroupImage(e.target.value)}
+        placeholder="Group image URL (optional)"
         className={`mb-3 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
       />
 
@@ -135,13 +148,18 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
           ))}
         </div>
       )}
+      {selected.length > 0 && (
+        <p className="-mt-2 mb-3 text-xs text-gray-500 dark:text-stone-400">
+          They&apos;ll receive an invite and join once they accept it.
+        </p>
+      )}
 
       <div className="relative mb-4">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search people to add..."
+          placeholder="Search people to invite..."
           className={`w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
         />
         <Search size={16} className="absolute left-3 top-3 text-gray-400 dark:text-stone-500" />
