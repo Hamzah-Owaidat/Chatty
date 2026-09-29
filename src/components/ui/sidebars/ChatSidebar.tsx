@@ -36,7 +36,7 @@ interface ChatUserDisplay {
   unread: number;
   isGroupChat: boolean;
   groupImage?: string | null;
-  adminId?: string | null;
+  adminIds?: string[];
   participants: ChatParticipant[];
 }
 
@@ -128,7 +128,7 @@ const ChatSidebar = () => {
       unread: chat.unreadMessagesCount || 0,
       isGroupChat: !!chatInfo?.isGroupChat,
       groupImage: chatInfo?.groupImage,
-      adminId: chatInfo?.adminId,
+      adminIds: chatInfo?.adminIds,
       participants: chat.participants || [],
     };
   };
@@ -257,7 +257,7 @@ const ChatSidebar = () => {
       status: resolveStatus(user),
       isGroupChat: user.isGroupChat,
       groupImage: user.groupImage,
-      adminId: user.adminId,
+      adminIds: user.adminIds,
       participants: user.participants,
     });
   };
