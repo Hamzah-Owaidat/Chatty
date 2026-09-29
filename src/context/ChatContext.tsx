@@ -25,7 +25,10 @@ type ChatContextType = {
   activeUserId: string | null;
   setActiveUserId: (id: string | null) => void;
   activeChat: ActiveChatInfo | null;
-  setActiveChat: (chat: ActiveChatInfo | null) => void;
+  // Dispatch (not a plain setter) so callers that merge live updates onto the
+  // current chat — e.g. a SignalR handler — can use the functional form and avoid
+  // clobbering a concurrent update made from a stale closure.
+  setActiveChat: React.Dispatch<React.SetStateAction<ActiveChatInfo | null>>;
   // Bumped whenever a chat is created or a request accepted elsewhere in the
   // tree (e.g. the notification dropdown) — the sidebar refetches on change.
   chatListVersion: number;

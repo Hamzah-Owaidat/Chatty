@@ -139,35 +139,49 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   // open, without needing a refetch. (Our own changes, made via GroupInfoModal, are
   // already applied locally the moment the API call succeeds.)
   useEffect(() => {
-    if (!connection || !chatId || !activeChat) return;
+    if (!connection || !chatId) return;
 
+    // Functional updates throughout — two of these events can arrive back-to-back
+    // before React re-runs this effect, and each handler otherwise closes over the
+    // same stale `activeChat` snapshot. Building the next state from `prev` (the
+    // actual latest state at apply time) instead of that snapshot means the second
+    // update can't clobber the first one's change.
     const handleParticipantAdded = (dto: ParticipantAddedDto) => {
       if (dto.chatId !== chatId || dto.participant.id === currentUser?.id) return;
-      setActiveChat({
-        ...activeChat,
-        participants: [
-          ...(activeChat.participants || []).filter((p) => p.id !== dto.participant.id),
-          dto.participant,
-        ],
-      });
+      setActiveChat((prev) =>
+        prev
+          ? {
+              ...prev,
+              participants: [
+                ...(prev.participants || []).filter((p) => p.id !== dto.participant.id),
+                dto.participant,
+              ],
+            }
+          : prev
+      );
     };
 
     const handleParticipantRemoved = (dto: ParticipantRemovedDto) => {
       if (dto.chatId !== chatId) return;
-      setActiveChat({
-        ...activeChat,
-        participants: (activeChat.participants || []).filter((p) => p.id !== dto.userId),
-      });
+      setActiveChat((prev) =>
+        prev
+          ? { ...prev, participants: (prev.participants || []).filter((p) => p.id !== dto.userId) }
+          : prev
+      );
     };
 
     const handleChatUpdated = (dto: ChatDetailsUpdatedDto) => {
       if (dto.chatId !== chatId) return;
-      setActiveChat({
-        ...activeChat,
-        name: dto.groupName || activeChat.name,
-        groupImage: dto.groupImage,
-        avatar: dto.groupImage || activeChat.avatar,
-      });
+      setActiveChat((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: dto.groupName || prev.name,
+              groupImage: dto.groupImage,
+              avatar: dto.groupImage || prev.avatar,
+            }
+          : prev
+      );
     };
 
     connection.on("ParticipantAdded", handleParticipantAdded);
@@ -179,7 +193,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
       connection.off("ParticipantRemoved", handleParticipantRemoved);
       connection.off("ChatUpdated", handleChatUpdated);
     };
-  }, [connection, chatId, activeChat, currentUser?.id, setActiveChat]);
+    // Deliberately not depending on `activeChat` — the handlers above read/merge
+    // via the functional setter form, not this closure, so re-subscribing on every
+    // content change (name, participants, ...) would just be wasted churn.
+  }, [connection, chatId, currentUser?.id, setActiveChat]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
