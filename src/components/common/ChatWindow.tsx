@@ -9,7 +9,7 @@ import { useSignalR } from "@/hooks/useSignalR";
 import { usePresence } from "@/hooks/usePresence";
 import { useChatActivity } from "@/hooks/useChatActivity";
 import { getActivityLabel } from "@/utils/chatActivity";
-import { formatRelativeTime } from "@/utils/time";
+import { formatRelativeTime, dayKey, formatDayDivider } from "@/utils/time";
 import { useNow } from "@/hooks/useNow";
 import { HubConnectionState } from "@microsoft/signalr";
 import { getMessages } from "@/lib/api/message";
@@ -518,71 +518,86 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             </div>
           ) : (
             <>
-              <div className="mb-4 flex justify-center">
-                <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
-                  Today
-                </span>
-              </div>
-
               {messages.map((msg, index) => {
+                const msgTimestamp = msg.sentAt || msg.timestamp || msg.createdAt;
+                const prevTimestamp = index > 0
+                  ? messages[index - 1].sentAt || messages[index - 1].timestamp || messages[index - 1].createdAt
+                  : undefined;
+                const showDayDivider = index === 0 || dayKey(msgTimestamp) !== dayKey(prevTimestamp);
+
+                const dayDivider = showDayDivider && (
+                  <div className="mb-4 mt-2 flex justify-center first:mt-0">
+                    <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
+                      {formatDayDivider(msgTimestamp)}
+                    </span>
+                  </div>
+                );
+
                 if (msg.type === BackendMessageType.Alert) {
                   return (
-                    <div key={msg.id} className="my-3 flex justify-center">
-                      <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
-                        {ensureStringContent(msg.content)}
-                      </span>
-                    </div>
+                    <React.Fragment key={msg.id}>
+                      {dayDivider}
+                      <div className="my-3 flex justify-center">
+                        <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
+                          {ensureStringContent(msg.content)}
+                        </span>
+                      </div>
+                    </React.Fragment>
                   );
                 }
 
                 const isOwn = msg.senderId === currentUser?.id;
-                const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
+                // A new day also restarts the sender grouping — same as WhatsApp, the
+                // name/avatar reappears after a day divider even mid-conversation.
+                const isFirstInGroup = showDayDivider || messages[index - 1].senderId !== msg.senderId;
                 const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
 
                 return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
-                  >
-                    <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                      {!isOwn && (
-                        <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
-                          {senderAvatar ? (
-                            <NextImage src={senderAvatar} alt={getSenderName(msg)} width={32} height={32} className="h-full w-full object-cover" />
-                          ) : (
-                            getSenderName(msg)?.charAt(0) || "U"
-                          )}
-                        </div>
-                      )}
+                  <React.Fragment key={msg.id}>
+                    {dayDivider}
+                    <div
+                      className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
+                    >
+                      <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+                        {!isOwn && (
+                          <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
+                            {senderAvatar ? (
+                              <NextImage src={senderAvatar} alt={getSenderName(msg)} width={32} height={32} className="h-full w-full object-cover" />
+                            ) : (
+                              getSenderName(msg)?.charAt(0) || "U"
+                            )}
+                          </div>
+                        )}
 
-                      <div className="group relative">
-                        <div
-                          style={{
-                            borderRadius: bubbleRadius(isOwn, isFirstInGroup),
-                            animationDelay: `${Math.min(index, 8) * 40}ms`,
-                          }}
-                          className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
-                            isOwn
-                              ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
-                              : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
-                          }`}
-                        >
-                          {isGroupChat && !isOwn && isFirstInGroup && (
-                            <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
-                              {getSenderName(msg)}
-                            </p>
-                          )}
-                          <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
-                          <div className="mt-1 flex items-center justify-end gap-1">
-                            <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
-                              {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
-                            </span>
-                            {isOwn && <MessageStatus status={msg.status} />}
+                        <div className="group relative">
+                          <div
+                            style={{
+                              borderRadius: bubbleRadius(isOwn, isFirstInGroup),
+                              animationDelay: `${Math.min(index, 8) * 40}ms`,
+                            }}
+                            className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
+                              isOwn
+                                ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
+                                : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
+                            }`}
+                          >
+                            {isGroupChat && !isOwn && isFirstInGroup && (
+                              <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
+                                {getSenderName(msg)}
+                              </p>
+                            )}
+                            <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
+                            <div className="mt-1 flex items-center justify-end gap-1">
+                              <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
+                                {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
+                              </span>
+                              {isOwn && <MessageStatus status={msg.status} />}
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
 
