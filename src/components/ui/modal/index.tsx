@@ -1,10 +1,13 @@
 "use client";
 import React, { useRef, useEffect } from "react";
+import { X } from "lucide-react";
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   className?: string;
+  panelClassName?: string;
+  backdropClassName?: string;
   children: React.ReactNode;
   showCloseButton?: boolean; // New prop to control close button visibility
   isFullscreen?: boolean; // Default to false for backwards compatibility
@@ -15,6 +18,8 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   children,
   className,
+  panelClassName,
+  backdropClassName,
   showCloseButton = true, // Default to true for backwards compatibility
   isFullscreen = false,
 }) => {
@@ -50,21 +55,24 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
+  const defaultPanelClasses = "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
   const contentClasses = isFullscreen
     ? "w-full h-full"
-    : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
+    : (panelClassName ?? defaultPanelClasses);
 
   return (
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
       {!isFullscreen && (
         <div
-          className="fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"
+          className={
+            backdropClassName ?? "fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"
+          }
           onClick={onClose}
         ></div>
       )}
       <div
         ref={modalRef}
-        className={`${contentClasses}  ${className}`}
+        className={`${contentClasses}  ${className ?? ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         {showCloseButton && (
@@ -93,3 +101,25 @@ export const Modal: React.FC<ModalProps> = ({
     </div>
   );
 };
+
+export const ModalHeader: React.FC<{
+  title: string;
+  description?: string;
+  onClose: () => void;
+}> = ({ title, description, onClose }) => (
+  <div className="flex items-start justify-between gap-4">
+    <div className="min-w-0">
+      <h4 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h4>
+      {description && (
+        <p className="mt-0.5 text-sm text-gray-500 dark:text-stone-400">{description}</p>
+      )}
+    </div>
+    <button
+      onClick={onClose}
+      aria-label="Close"
+      className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-stone-500 dark:hover:bg-white/5 dark:hover:text-white"
+    >
+      <X size={16} />
+    </button>
+  </div>
+);
