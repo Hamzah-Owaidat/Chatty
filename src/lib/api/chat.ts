@@ -1,5 +1,7 @@
+import axios from 'axios';
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
+import { toPercent } from './file';
 import { UserChat, ApiChatResponse, ChatCreateDto, ChatSummary, UpdateChatDetailsDto, ApiEnvelope } from '@/types/chat/chat.models';
 
 export async function getUserChats(): Promise<UserChat[]> {
@@ -169,6 +171,30 @@ export async function updateChatDetails(chatId: string, details: UpdateChatDetai
     return response.data.data;
   } catch (err: any) {
     if (err.response?.data) {
+      throw err.response.data;
+    }
+    throw err;
+  }
+}
+
+// POST /api/chat/{chatId}/image — admin-only, multipart, field "file". Members are
+// notified through the usual "ChatUpdated" SignalR event.
+export async function uploadGroupImage(chatId: string, file: File, onProgress?: (percent: number) => void): Promise<ChatSummary> {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const response = await api.post<ApiEnvelope<ChatSummary>>(`/chat/${chatId}/image`, form, {
+      headers: { Authorization: `Bearer ${token}` },
+      onUploadProgress: (e) => onProgress?.(toPercent(e.loaded, e.total)),
+    });
+
+    return response.data.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data) {
       throw err.response.data;
     }
     throw err;

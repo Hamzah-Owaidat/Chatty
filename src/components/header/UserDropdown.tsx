@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { User, Settings, LifeBuoy, LogOut, ChevronDown } from "lucide-react";
@@ -10,6 +9,7 @@ import { useAppDispatch } from "@/store/hooks";
 import { logout } from "@/store/slices/authSlice"; // adjust path if needed
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "../common/LoadingSpinner";
+import UserAvatar from "@/components/common/UserAvatar";
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 const menuItemClass =
@@ -98,13 +98,7 @@ export default function UserDropdown() {
         className={`dropdown-toggle flex items-center gap-2 rounded-full border border-transparent py-1 pl-1 pr-3 text-gray-700 transition-all duration-200 ${EASE} hover:-translate-y-px hover:border-gray-200/70 hover:bg-white hover:shadow-[0_10px_20px_-14px_rgba(16,24,40,.35)] dark:text-gray-300 dark:hover:border-stone-700/70 dark:hover:bg-[#292524]`}
       >
         <span className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-white dark:ring-stone-800">
-          <Image
-            width={36}
-            height={36}
-            src="/images/user/owner.jpg"
-            alt="User"
-            className="h-full w-full object-cover"
-          />
+          <UserAvatar src={user.image} name={user.displayName || user.userName} size={36} />
         </span>
 
         <span className="hidden whitespace-nowrap text-theme-sm font-medium sm:block">{user?.userName}</span>
@@ -122,13 +116,7 @@ export default function UserDropdown() {
       >
         <div className="flex items-center gap-3 px-2.5 py-2.5">
           <span className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-white dark:ring-stone-800">
-            <Image
-              width={36}
-              height={36}
-              src="/images/user/owner.jpg"
-              alt="User"
-              className="h-full w-full object-cover"
-            />
+            <UserAvatar src={user.image} name={user.displayName || user.userName} size={36} />
           </span>
           <div className="min-w-0">
             <span className="block truncate text-theme-sm font-semibold text-gray-800 dark:text-gray-100">

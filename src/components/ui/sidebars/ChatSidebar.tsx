@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HubConnection } from "@microsoft/signalr";
 import { useSidebar } from "../../../context/SidebarContext";
@@ -16,6 +15,7 @@ import { usePresence } from "@/hooks/usePresence";
 import { useChatActivity } from "@/hooks/useChatActivity";
 import { getActivityLabel } from "@/utils/chatActivity";
 import { formatRelativeTime } from "@/utils/time";
+import { describeAttachments } from "@/utils/file";
 import { useNow } from "@/hooks/useNow";
 import { Dropdown } from "../dropdown/Dropdown";
 import { DropdownItem } from "../dropdown/DropdownItem";
@@ -23,6 +23,7 @@ import { useModal } from "@/hooks/useModal";
 import NewChatModal from "@/components/common/NewChatModal";
 import NewGroupModal from "@/components/common/NewGroupModal";
 import InviteLinkModal from "@/components/common/InviteLinkModal";
+import UserAvatar from "@/components/common/UserAvatar";
 
 interface ChatUserDisplay {
   id: string;
@@ -85,6 +86,11 @@ const ChatSidebar = () => {
     if (typeof message === 'object') {
       // If it's a message object, extract the content
       if (message.content) return String(message.content);
+      // Attachment-only message (e.g. just a photo) — describe what was sent
+      if (Array.isArray(message.attachments) && message.attachments.length > 0) {
+        return describeAttachments(message.attachments);
+      }
+      if ('content' in message) return '';
       if (message.text) return String(message.text);
       if (message.message) return String(message.message);
       // Otherwise, stringify it
@@ -98,7 +104,7 @@ const ChatSidebar = () => {
   const transformChat = (chat: UserChat): ChatUserDisplay => {
     const chatInfo = chat.chat;
     let name: string;
-    let avatar: string = "/images/user/user-01.jpg";
+    let avatar = "";
 
     const otherParticipant = chat.participants?.[0];
 
@@ -310,12 +316,11 @@ const ChatSidebar = () => {
         )}
 
         <div className="relative shrink-0">
-          <Image
+          <UserAvatar
             src={user.avatar}
-            alt={user.name}
-            width={48}
-            height={48}
-            className={`rounded-full object-cover ${user.isGroupChat ? "" : statusRingClass(status)}`}
+            name={user.name}
+            size={48}
+            className={`rounded-full ${user.isGroupChat ? "" : statusRingClass(status)}`}
           />
           {/* Groups have no single peer to be "online" — the presence dot only makes
               sense for a direct chat. */}

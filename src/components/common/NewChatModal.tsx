@@ -1,6 +1,5 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Search, Send } from "lucide-react";
 import { Modal } from "../ui/modal";
 import { searchUsers } from "@/lib/api/user";
@@ -8,6 +7,7 @@ import { sendChatRequest } from "@/lib/api/chatRequest";
 import { ChatParticipant } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
+import UserAvatar from "@/components/common/UserAvatar";
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -103,13 +103,7 @@ export default function NewChatModal({ isOpen, onClose }: NewChatModalProps) {
                   disabled={sendingId === user.id}
                   className={`flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-colors duration-150 hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-white/5`}
                 >
-                  <Image
-                    src={user.image || "/images/user/user-01.jpg"}
-                    alt={user.displayName}
-                    width={40}
-                    height={40}
-                    className="rounded-full object-cover"
-                  />
+                  <UserAvatar src={user.image} name={user.displayName} size={40} />
                   <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
                     {user.displayName}
                   </span>

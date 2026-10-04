@@ -1,6 +1,5 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MessageCircle } from "lucide-react";
@@ -10,6 +9,7 @@ import { getErrorMessage } from "@/utils/error";
 import { ChatInviteInfo } from "@/types/chat/chat.models";
 import ThemeResponsiveLogo from "@/components/common/ThemeResponsiveLogo";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
+import UserAvatar from "@/components/common/UserAvatar";
 
 type Status = "loading" | "preview" | "error";
 
@@ -86,13 +86,7 @@ export default function InviteLandingPage({ token }: { token: string }) {
       <ThemeResponsiveLogo className="h-8 w-auto" />
 
       <div className="flex flex-col items-center gap-3">
-        <Image
-          src={info?.senderImage || "/images/user/user-01.jpg"}
-          alt={info?.senderDisplayName || "Chatty user"}
-          width={72}
-          height={72}
-          className="rounded-full object-cover"
-        />
+        <UserAvatar src={info?.senderImage} name={info?.senderDisplayName || "Chatty user"} size={72} />
         <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">
           {info?.senderDisplayName} invited you to chat
         </h1>

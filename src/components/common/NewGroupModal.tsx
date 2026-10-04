@@ -1,6 +1,5 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Search, X } from "lucide-react";
 import { Modal } from "../ui/modal";
 import { searchUsers } from "@/lib/api/user";
@@ -10,6 +9,7 @@ import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useAppSelector } from "@/store/hooks";
 import { useChat } from "@/context/ChatContext";
+import UserAvatar from "@/components/common/UserAvatar";
 
 interface NewGroupModalProps {
   isOpen: boolean;
@@ -133,13 +133,7 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
               key={user.id}
               className="flex items-center gap-1.5 rounded-full bg-[#1a7b9b]/10 py-1 pl-1 pr-2 text-xs font-medium text-[#1a7b9b] dark:bg-[#2596bb]/15 dark:text-[#60c7e3]"
             >
-              <Image
-                src={user.image || "/images/user/user-01.jpg"}
-                alt={user.displayName}
-                width={20}
-                height={20}
-                className="rounded-full object-cover"
-              />
+              <UserAvatar src={user.image} name={user.displayName} size={20} />
               {user.displayName}
               <button onClick={() => toggleSelected(user)} aria-label={`Remove ${user.displayName}`}>
                 <X size={12} />
@@ -182,13 +176,7 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
                   onClick={() => toggleSelected(user)}
                   className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-white/5"
                 >
-                  <Image
-                    src={user.image || "/images/user/user-01.jpg"}
-                    alt={user.displayName}
-                    width={40}
-                    height={40}
-                    className="rounded-full object-cover"
-                  />
+                  <UserAvatar src={user.image} name={user.displayName} size={40} />
                   <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
                     {user.displayName}
                   </span>
