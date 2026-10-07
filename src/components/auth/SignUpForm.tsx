@@ -89,8 +89,11 @@ export default function SignUpForm() {
     }
 
     try {
-      const data = await register(formData as RegisterData);
-      localStorage.setItem("token", data.token);
+      const res = await register(formData as RegisterData);
+      if (!res.isSuccess) {
+        showToast.error(res.error || "Registration failed");
+        return;
+      }
       router.push(signInHref);
     } catch (err) {
       showToast.error(getErrorMessage(err));
@@ -170,7 +173,7 @@ export default function SignUpForm() {
 
             <div className="mb-6 flex items-center gap-3">
               <span className="h-px flex-1" style={{ background: "linear-gradient(90deg, transparent, #e4e7ec)" }} />
-              <span className="text-[11.5px] font-medium uppercase tracking-wide text-gray-400 dark:text-stone-500">
+              <span className="text-[11.5px] font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
                 Or
               </span>
               <span className="h-px flex-1" style={{ background: "linear-gradient(270deg, transparent, #e4e7ec)" }} />
@@ -182,7 +185,7 @@ export default function SignUpForm() {
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                   {/* <!-- UserName --> */}
                   <div className="sm:col-span-1">
-                    <Label>
+                    <Label htmlFor="uname">
                       Username {errors.userName && (<span className="text-error-500">*</span>)}
                     </Label>
                     <div className="relative">
@@ -203,7 +206,7 @@ export default function SignUpForm() {
 
                   {/* <!-- Display Name --> */}
                   <div className="sm:col-span-1">
-                    <Label>
+                    <Label htmlFor="displayName">
                       Display Name {errors.displayName && (<span className="text-error-500">*</span>)}
                     </Label>
                     <div className="relative">
@@ -225,7 +228,7 @@ export default function SignUpForm() {
 
                 {/* <!-- Email --> */}
                 <div>
-                  <Label>
+                  <Label htmlFor="email">
                     Email {errors.email && (<span className="text-error-500">*</span>)}
                   </Label>
                   <div className="relative">
@@ -246,7 +249,7 @@ export default function SignUpForm() {
 
                 {/* <!-- Password --> */}
                 <div>
-                  <Label>
+                  <Label htmlFor="password">
                     Password {errors.password && (<span className="text-error-500">*</span>)}
                   </Label>
                   <div className="relative">
@@ -264,6 +267,7 @@ export default function SignUpForm() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                       className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15`}
                     >
                       {showPassword ? (
@@ -296,8 +300,8 @@ export default function SignUpForm() {
                 {/* <!-- Checkbox --> */}
                 <div className="rounded-2xl border border-gray-200 bg-[#f9fafb] px-3.5 py-3 dark:border-stone-700 dark:bg-white/[.03]">
                   <div className="flex items-center gap-3">
-                    <Checkbox checked={isChecked} onChange={setIsChecked} />
-                    <p className="inline-block text-sm font-normal text-gray-500 dark:text-gray-400">
+                    <Checkbox id="accept-terms" checked={isChecked} onChange={setIsChecked} />
+                    <label htmlFor="accept-terms" className="inline-block cursor-pointer text-sm font-normal text-gray-500 dark:text-gray-400">
                       By creating an account means you agree to the{" "}
                       <span className="text-gray-800 dark:text-white/90">
                         Terms and Conditions,{" "}
@@ -306,7 +310,7 @@ export default function SignUpForm() {
                       <span className="text-gray-800 dark:text-white">
                         Privacy Policy
                       </span>
-                    </p>
+                    </label>
                   </div>
                   {errors.checkbox && <ErrorRow message={errors.checkbox} />}
                 </div>
@@ -335,7 +339,7 @@ export default function SignUpForm() {
                 Already have an account?{" "}
                 <Link
                   href={signInHref}
-                  className="text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]"
+                  className="font-medium text-[#1a7b9b] underline underline-offset-2 hover:text-[#15657d] dark:text-[#60c7e3]"
                 >
                   Sign In
                 </Link>

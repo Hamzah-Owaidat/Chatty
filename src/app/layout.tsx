@@ -1,5 +1,11 @@
 import './globals.css';
 import { Providers } from '../components/providers/providers';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Chatty',
+  description: 'Connect, chat and create meaningful conversations with Chatty.',
+};
 
 export default function RootLayout({
   children,
