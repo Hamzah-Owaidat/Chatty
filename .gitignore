@@ -46,3 +46,15 @@ docs
 # Claude Code
 .claude/
 
+# design-sync (converter scripts, build output, machine state, fork symlink)
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+
+
+# testing
+test-results/
+playwright-report/
+blob-report/

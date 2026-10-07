@@ -118,7 +118,7 @@ export default function SignInForm() {
 
           <div className="mb-6 flex items-center gap-3">
             <span className="h-px flex-1" style={{ background: "linear-gradient(90deg, transparent, #e4e7ec)" }} />
-            <span className="text-[11.5px] font-medium uppercase tracking-wide text-gray-400 dark:text-stone-500">
+            <span className="text-[11.5px] font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
               Or
             </span>
             <span className="h-px flex-1" style={{ background: "linear-gradient(270deg, transparent, #e4e7ec)" }} />
@@ -128,7 +128,7 @@ export default function SignInForm() {
 
             {/* Username */}
             <div>
-              <Label>
+              <Label htmlFor="userName">
                 Username {errors.userName && <span className="text-error-500">*</span>}
               </Label>
               <div className="relative">
@@ -148,7 +148,7 @@ export default function SignInForm() {
 
             {/* Password */}
             <div>
-              <Label>
+              <Label htmlFor="password">
                 Password {errors.password && <span className="text-error-500">*</span>}
               </Label>
               <div className="relative">
@@ -166,6 +166,7 @@ export default function SignInForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15`}
                 >
                   {showPassword ? (
@@ -181,10 +182,10 @@ export default function SignInForm() {
             {/* Options */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Checkbox checked={isChecked} onChange={setIsChecked} />
-                <span className="text-sm text-gray-700 dark:text-gray-400">
+                <Checkbox id="keep-me-logged-in" checked={isChecked} onChange={setIsChecked} />
+                <label htmlFor="keep-me-logged-in" className="cursor-pointer text-sm text-gray-700 dark:text-gray-400">
                   Keep me logged in
-                </span>
+                </label>
               </div>
               <Link
                 href="/auth/reset-password"
@@ -215,7 +216,7 @@ export default function SignInForm() {
           <div className="mt-5">
             <p className="text-sm text-center text-gray-700 dark:text-gray-400 sm:text-start">
               Don&apos;t have an account?{" "}
-              <Link href="/auth/signup" className="text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]">
+              <Link href="/auth/signup" className="font-medium text-[#1a7b9b] underline underline-offset-2 hover:text-[#15657d] dark:text-[#60c7e3]">
                 Sign Up
               </Link>
             </p>

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
-import { Modal } from "../ui/modal";
+import { Modal, ModalHeader } from "../ui/modal";
 import { searchUsers } from "@/lib/api/user";
 import { createChat } from "@/lib/api/chat";
 import { ChatParticipant } from "@/types/chat/chat.models";
@@ -16,7 +16,11 @@ interface NewGroupModalProps {
   onClose: () => void;
 }
 
-const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
+const BACKDROP = "fixed inset-0 h-full w-full bg-stone-950/30";
+const PANEL =
+  "relative flex max-h-[80dvh] w-[calc(100%-1.5rem)] max-w-md flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_24px_48px_-16px_rgba(16,24,40,.35)] ring-1 ring-black/5 animate-[floatIn_.2s_cubic-bezier(.2,.8,.2,1)_both] dark:bg-stone-900 dark:ring-white/10";
+const FIELD =
+  "w-full rounded-xl bg-gray-100 px-3.5 py-2.5 text-sm text-gray-900 outline-none ring-1 ring-transparent transition placeholder:text-gray-400 focus:bg-white focus:ring-[#1a7b9b]/50 dark:bg-stone-800 dark:text-white dark:placeholder:text-stone-500 dark:focus:ring-[#2596bb]/60";
 
 export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
   const [groupName, setGroupName] = useState("");
@@ -106,94 +110,114 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
   const availableResults = results.filter((u) => !selected.some((s) => s.id === u.id));
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-md p-6">
-      <h4 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">New group</h4>
-
-      <input
-        type="text"
-        autoFocus
-        value={groupName}
-        onChange={(e) => setGroupName(e.target.value)}
-        placeholder="Group name"
-        className={`mb-3 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton={false}
+      panelClassName={PANEL}
+      backdropClassName={BACKDROP}
+    >
+      <ModalHeader
+        title="New group"
+        description="Name it, then invite people."
+        onClose={onClose}
       />
 
-      <input
-        type="text"
-        value={groupImage}
-        onChange={(e) => setGroupImage(e.target.value)}
-        placeholder="Group image URL (optional)"
-        className={`mb-3 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
-      />
-
-      {selected.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {selected.map((user) => (
-            <span
-              key={user.id}
-              className="flex items-center gap-1.5 rounded-full bg-[#1a7b9b]/10 py-1 pl-1 pr-2 text-xs font-medium text-[#1a7b9b] dark:bg-[#2596bb]/15 dark:text-[#60c7e3]"
-            >
-              <UserAvatar src={user.image} name={user.displayName} size={20} />
-              {user.displayName}
-              <button onClick={() => toggleSelected(user)} aria-label={`Remove ${user.displayName}`}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
+      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex flex-col gap-2.5">
+          <input
+            type="text"
+            autoFocus
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+            placeholder="Group name"
+            className={FIELD}
+          />
+          <input
+            type="text"
+            value={groupImage}
+            onChange={(e) => setGroupImage(e.target.value)}
+            placeholder="Image URL (optional)"
+            className={FIELD}
+          />
         </div>
-      )}
-      {selected.length > 0 && (
-        <p className="-mt-2 mb-3 text-xs text-gray-500 dark:text-stone-400">
-          They&apos;ll receive an invite and join once they accept it.
-        </p>
-      )}
 
-      <div className="relative mb-4">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search people to invite..."
-          className={`w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
-        />
-        <Search size={16} className="absolute left-3 top-3 text-gray-400 dark:text-stone-500" />
-      </div>
+        <div className="relative">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search people to invite"
+            className={`${FIELD} pl-10`}
+          />
+          <Search size={16} className="absolute left-3.5 top-3 text-gray-400 dark:text-stone-500" />
+        </div>
 
-      <div className="mb-4 max-h-56 overflow-y-auto">
-        {searching ? (
-          <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">Searching...</p>
-        ) : query.trim().length < 2 ? (
-          <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
-            Type at least 2 characters to search.
-          </p>
-        ) : availableResults.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">No users found.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {availableResults.map((user) => (
-              <li key={user.id}>
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selected.map((user) => (
+              <span
+                key={user.id}
+                className="flex items-center gap-1.5 rounded-full bg-[#1a7b9b]/10 py-1 pl-1 pr-1.5 text-xs font-medium text-[#1a7b9b] dark:bg-[#2596bb]/15 dark:text-[#60c7e3]"
+              >
+                <UserAvatar 
+                  src={user.image} 
+                  name={user.displayName} 
+                  size={18} 
+                />
+                {user.displayName}
                 <button
                   onClick={() => toggleSelected(user)}
-                  className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-white/5"
+                  aria-label={`Remove ${user.displayName}`}
+                  className="rounded-full p-0.5 transition hover:bg-[#1a7b9b]/15 dark:hover:bg-white/10"
                 >
-                  <UserAvatar src={user.image} name={user.displayName} size={40} />
-                  <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
-                    {user.displayName}
-                  </span>
+                  <X size={11} />
                 </button>
-              </li>
+              </span>
             ))}
-          </ul>
+          </div>
         )}
-      </div>
 
-      <button
-        onClick={handleCreate}
-        disabled={creating}
-        className={`flex w-full items-center justify-center rounded-xl bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] py-2.5 text-sm font-medium text-white transition-all duration-200 ${EASE} hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50`}
-      >
-        {creating ? "Creating..." : "Create group"}
-      </button>
+        <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2">
+          {searching ? (
+            <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">Searching…</p>
+          ) : query.trim().length < 2 ? (
+            <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">
+              Type at least 2 characters to search.
+            </p>
+          ) : availableResults.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-500 dark:text-stone-400">No users found.</p>
+          ) : (
+            <ul className="flex flex-col">
+              {availableResults.map((user) => (
+                <li key={user.id}>
+                  <button
+                    onClick={() => toggleSelected(user)}
+                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-gray-100 dark:hover:bg-white/5"
+                  >
+                    <UserAvatar 
+                      src={user.image} 
+                      name={user.displayName} 
+                      size={36} 
+                    />
+                    <span className="flex-1 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {user.displayName}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <button
+          onClick={handleCreate}
+          disabled={creating}
+          className="mt-1 w-full rounded-xl bg-[#1a7b9b] py-2.5 text-sm font-medium text-white transition hover:bg-[#166b87] disabled:pointer-events-none disabled:opacity-50 dark:bg-[#2596bb] dark:hover:bg-[#2085a6]"
+        >
+          {creating ? "Creating…" : "Create group"}
+        </button>
+      </div>
     </Modal>
   );
 }

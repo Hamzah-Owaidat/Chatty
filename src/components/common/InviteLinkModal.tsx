@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Link2, Copy, Check } from "lucide-react";
-import { Modal } from "../ui/modal";
+import { Check, Copy } from "lucide-react";
+import { Modal, ModalHeader } from "../ui/modal";
 import { getOrCreateInviteLink } from "@/lib/api/invite";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
@@ -11,7 +11,9 @@ interface InviteLinkModalProps {
   onClose: () => void;
 }
 
-const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
+const BACKDROP = "fixed inset-0 h-full w-full bg-stone-950/30";
+const PANEL =
+  "relative flex w-[calc(100%-1.5rem)] max-w-md flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_24px_48px_-16px_rgba(16,24,40,.35)] ring-1 ring-black/5 animate-[floatIn_.2s_cubic-bezier(.2,.8,.2,1)_both] dark:bg-stone-900 dark:ring-white/10";
 
 export default function InviteLinkModal({ isOpen, onClose }: InviteLinkModalProps) {
   const [link, setLink] = useState<string | null>(null);
@@ -56,35 +58,41 @@ export default function InviteLinkModal({ isOpen, onClose }: InviteLinkModalProp
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-md p-6">
-      <h4 className="mb-2 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
-        <Link2 size={18} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
-        Invite via link
-      </h4>
-      <p className="mb-4 text-sm text-gray-500 dark:text-stone-400">
-        Anyone with this link can start a chat with you directly.
-      </p>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton={false}
+      panelClassName={PANEL}
+      backdropClassName={BACKDROP}
+    >
+      <ModalHeader
+        title="Invite via link"
+        description="Anyone with this link can start a chat with you."
+        onClose={onClose}
+      />
 
-      {loading ? (
-        <p className="py-4 text-center text-sm text-gray-500 dark:text-stone-400">Generating your link...</p>
-      ) : link ? (
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            readOnly
-            value={link}
-            onFocus={(e) => e.target.select()}
-            className={`w-full min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700 outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-gray-200`}
-          />
-          <button
-            onClick={handleCopy}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1a7b9b] text-white transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:shadow-[0_10px_18px_-10px_rgba(26,123,155,.7)] active:scale-95 dark:bg-[#2596bb]`}
-            aria-label="Copy invite link"
-          >
-            {copied ? <Check size={16} /> : <Copy size={16} />}
-          </button>
-        </div>
-      ) : null}
+      <div className="mt-4">
+        {loading ? (
+          <p className="py-4 text-center text-sm text-gray-500 dark:text-stone-400">Generating your link…</p>
+        ) : link ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={link}
+              onFocus={(e) => e.target.select()}
+              className="min-w-0 flex-1 truncate rounded-xl bg-gray-100 px-3.5 py-2.5 text-sm text-gray-700 outline-none ring-1 ring-transparent transition focus:bg-white focus:ring-[#1a7b9b]/50 dark:bg-stone-800 dark:text-gray-200 dark:focus:ring-[#2596bb]/60"
+            />
+            <button
+              onClick={handleCopy}
+              aria-label="Copy invite link"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1a7b9b] text-white transition hover:bg-[#166b87] active:scale-95 dark:bg-[#2596bb] dark:hover:bg-[#2085a6]"
+            >
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+            </button>
+          </div>
+        ) : null}
+      </div>
     </Modal>
   );
 }

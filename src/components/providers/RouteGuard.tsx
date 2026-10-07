@@ -12,7 +12,7 @@ interface RouteGuardProps {
 /**
  * Global route guard.
  * - If user has no token, redirects to /auth/signin.
- * - Auth routes (/auth/...) remain publicly accessible.
+ * - Auth routes (/auth/...) and the landing page (/) remain publicly accessible.
  * - Invite links (/invite/...) remain publicly accessible too, so an unauthenticated
  *   visitor can see who invited them before being sent to sign in/up.
  */
@@ -27,7 +27,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     setMounted(true);
   }, []);
 
-  const isPublicRoute = pathname?.startsWith("/auth") || pathname?.startsWith("/invite");
+  const isPublicRoute = pathname === "/" || pathname?.startsWith("/auth") || pathname?.startsWith("/invite");
 
   useEffect(() => {
     if (!mounted || !initialized) return;

@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /* config options here */
   images: {
-    // Uploaded profile/group images are served from Cloudinary's CDN.
     remotePatterns: [
       {
         protocol: "https",

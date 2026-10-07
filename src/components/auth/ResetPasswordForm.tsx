@@ -50,7 +50,7 @@ const StepIndicator = ({ currentIndex }: { currentIndex: number }) => {
               </span>
               <span
                 className={`whitespace-nowrap text-[11px] font-medium ${
-                  isCurrent ? "text-[#1a7b9b] dark:text-[#60c7e3]" : "text-gray-400 dark:text-stone-500"
+                  isCurrent ? "text-[#15657d] dark:text-[#60c7e3]" : "text-gray-500 dark:text-stone-400"
                 }`}
               >
                 {label}
@@ -223,12 +223,13 @@ export default function ResetPasswordForm() {
 
           <form onSubmit={submitNewPassword} className="space-y-5">
             <div>
-              <Label>
+              <Label htmlFor="new-password">
                 New password {passwordErrors.password && <span className="text-error-500">*</span>}
               </Label>
               <div className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
+                  id="new-password"
                   name="password"
                   value={passwords.password}
                   onChange={handlePasswordChange}
@@ -240,6 +241,7 @@ export default function ResetPasswordForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide new password" : "Show new password"}
                   className="absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15"
                 >
                   {showPassword ? (
@@ -275,12 +277,13 @@ export default function ResetPasswordForm() {
             </div>
 
             <div>
-              <Label>
+              <Label htmlFor="confirm-password">
                 Confirm new password {passwordErrors.confirmPassword && <span className="text-error-500">*</span>}
               </Label>
               <div className="relative">
                 <Input
                   type={showConfirmPassword ? "text" : "password"}
+                  id="confirm-password"
                   name="confirmPassword"
                   value={passwords.confirmPassword}
                   onChange={handlePasswordChange}
@@ -292,6 +295,7 @@ export default function ResetPasswordForm() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                   className="absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15"
                 >
                   {showConfirmPassword ? (
@@ -374,13 +378,14 @@ export default function ResetPasswordForm() {
 
         <form onSubmit={submitRequest} className="space-y-5">
           <div>
-            <Label>
+            <Label htmlFor="reset-email">
               Email {emailError && <span className="text-error-500">*</span>}
             </Label>
             <div className="relative">
               <Mail size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-stone-500" />
               <Input
                 type="text"
+                id="reset-email"
                 name="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

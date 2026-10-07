@@ -112,50 +112,6 @@ export async function leaveChat(chatId: string): Promise<ChatSummary> {
   }
 }
 
-// POST /api/chat/{chatId}/participants/{targetUserId}/promote — admin-only; grants
-// targetUserId admin rights too. Can't target yourself.
-export async function promoteParticipant(chatId: string, targetUserId: string): Promise<ChatSummary> {
-  const token = getSavedToken();
-  if (!token) throw new Error('No auth token found');
-
-  try {
-    const response = await api.post<ApiEnvelope<ChatSummary>>(
-      `/chat/${chatId}/participants/${targetUserId}/promote`,
-      null,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    return response.data.data;
-  } catch (err: any) {
-    if (err.response?.data) {
-      throw err.response.data;
-    }
-    throw err;
-  }
-}
-
-// POST /api/chat/{chatId}/participants/{targetUserId}/demote — admin-only; revokes
-// targetUserId's admin rights (they remain a regular member). Can't target yourself.
-export async function demoteParticipant(chatId: string, targetUserId: string): Promise<ChatSummary> {
-  const token = getSavedToken();
-  if (!token) throw new Error('No auth token found');
-
-  try {
-    const response = await api.post<ApiEnvelope<ChatSummary>>(
-      `/chat/${chatId}/participants/${targetUserId}/demote`,
-      null,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    return response.data.data;
-  } catch (err: any) {
-    if (err.response?.data) {
-      throw err.response.data;
-    }
-    throw err;
-  }
-}
-
 // PATCH /api/chat/{chatId} — admin-only; only non-null fields in details are applied.
 export async function updateChatDetails(chatId: string, details: UpdateChatDetailsDto): Promise<ChatSummary> {
   const token = getSavedToken();
