@@ -518,12 +518,6 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             </div>
           ) : (
             <>
-              <div className="mb-4 flex justify-center">
-                <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
-                  Today
-                </span>
-              </div>
-
               {messages.map((msg, index) => {
                 if (msg.type === BackendMessageType.Alert) {
                   return (
@@ -582,7 +576,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
 

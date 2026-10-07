@@ -92,7 +92,7 @@ export interface ChatSummary {
   groupName?: string | null;
   groupImage?: string | null;
   participantsIds: string[];
-  adminId?: string | null;
+  adminIds: string[];
   createdAt: string;
   lastMessageAt: string;
   lastMessage?: ChatMessage | null;
