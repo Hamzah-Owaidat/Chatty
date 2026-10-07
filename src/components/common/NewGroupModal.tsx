@@ -1,6 +1,5 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Search, X } from "lucide-react";
 import { Modal, ModalHeader } from "../ui/modal";
 import { searchUsers } from "@/lib/api/user";
@@ -10,6 +9,7 @@ import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useAppSelector } from "@/store/hooks";
 import { useChat } from "@/context/ChatContext";
+import UserAvatar from "@/components/common/UserAvatar";
 
 interface NewGroupModalProps {
   isOpen: boolean;
@@ -160,12 +160,10 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
                 key={user.id}
                 className="flex items-center gap-1.5 rounded-full bg-[#1a7b9b]/10 py-1 pl-1 pr-1.5 text-xs font-medium text-[#1a7b9b] dark:bg-[#2596bb]/15 dark:text-[#60c7e3]"
               >
-                <Image
-                  src={user.image || "/images/user/user-01.jpg"}
-                  alt={user.displayName}
-                  width={18}
-                  height={18}
-                  className="rounded-full object-cover"
+                <UserAvatar 
+                  src={user.image} 
+                  name={user.displayName} 
+                  size={18} 
                 />
                 {user.displayName}
                 <button
@@ -197,12 +195,10 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
                     onClick={() => toggleSelected(user)}
                     className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-gray-100 dark:hover:bg-white/5"
                   >
-                    <Image
-                      src={user.image || "/images/user/user-01.jpg"}
-                      alt={user.displayName}
-                      width={36}
-                      height={36}
-                      className="rounded-full object-cover"
+                    <UserAvatar 
+                      src={user.image} 
+                      name={user.displayName} 
+                      size={36} 
                     />
                     <span className="flex-1 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                       {user.displayName}

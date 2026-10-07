@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { HubConnection } from "@microsoft/signalr";
 import { Check, X, Users } from "lucide-react";
@@ -10,6 +9,7 @@ import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useChat } from "@/context/ChatContext";
 import { startSignalRConnection } from "@/lib/signalr/signalr";
+import UserAvatar from "@/components/common/UserAvatar";
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -186,13 +186,7 @@ export default function NotificationDropdown() {
                         <Users size={18} />
                       </span>
                     ) : (
-                      <Image
-                        width={40}
-                        height={40}
-                        src={(isGroupInvite ? request.chatImage : request.sender.image) || "/images/user/user-01.jpg"}
-                        alt={isGroupInvite ? request.chatName || "Group" : request.sender.displayName}
-                        className="w-full overflow-hidden rounded-full object-cover"
-                      />
+                      <UserAvatar src={isGroupInvite ? request.chatImage : request.sender.image} name={isGroupInvite ? request.chatName || "Group" : request.sender.displayName} size={40} />
                     )}
                   </span>
 

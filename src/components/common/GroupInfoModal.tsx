@@ -1,16 +1,17 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Crown, LogOut, Search, UserPlus, UserMinus, Users } from "lucide-react";
 import { Modal } from "../ui/modal";
 import { searchUsers } from "@/lib/api/user";
-import { removeParticipant, updateChatDetails, leaveChat } from "@/lib/api/chat";
+import { removeParticipant, updateChatDetails, leaveChat, uploadGroupImage } from "@/lib/api/chat";
 import { sendChatRequest } from "@/lib/api/chatRequest";
 import { ChatParticipant } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useAppSelector } from "@/store/hooks";
 import { useChat } from "@/context/ChatContext";
+import AvatarUpload from "./AvatarUpload";
+import UserAvatar from "@/components/common/UserAvatar";
 
 interface GroupInfoModalProps {
   isOpen: boolean;
@@ -25,7 +26,6 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
   const currentUser = useAppSelector((state) => state.auth.user);
 
   const [groupName, setGroupName] = useState("");
-  const [groupImage, setGroupImage] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
 
   const [query, setQuery] = useState("");
@@ -41,7 +41,6 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
   useEffect(() => {
     if (isOpen) {
       setGroupName(activeChat?.name || "");
-      setGroupImage(activeChat?.groupImage || "");
       setQuery("");
       setResults([]);
     }
@@ -100,10 +99,7 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
 
     setSavingDetails(true);
     try {
-      const updated = await updateChatDetails(chatId, {
-        groupName: groupName.trim(),
-        groupImage: groupImage.trim(),
-      });
+      const updated = await updateChatDetails(chatId, { groupName: groupName.trim() });
       setActiveChat({
         ...activeChat,
         name: updated.groupName || activeChat.name,
@@ -116,6 +112,20 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
       showToast.error(getErrorMessage(err));
     } finally {
       setSavingDetails(false);
+    }
+  };
+
+  // Other members get the new image live through the "ChatUpdated" SignalR event.
+  const handleImageUpload = async (file: File, onProgress: (percent: number) => void) => {
+    try {
+      const updated = await uploadGroupImage(chatId, file, onProgress);
+      setActiveChat((prev) =>
+        prev ? { ...prev, groupImage: updated.groupImage, avatar: updated.groupImage || prev.avatar } : prev
+      );
+      refreshChatList();
+      showToast.success("Group image updated");
+    } catch (err) {
+      showToast.error(getErrorMessage(err));
     }
   };
 
@@ -173,6 +183,16 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
         Group info
       </h4>
 
+      <div className="mb-5 flex justify-center">
+        <AvatarUpload
+          imageUrl={activeChat.groupImage}
+          fallbackText={activeChat.name || "Group"}
+          onUpload={handleImageUpload}
+          size={96}
+          disabled={!isAdmin}
+        />
+      </div>
+
       {isAdmin ? (
         <div className="mb-5 flex flex-col gap-3">
           <input
@@ -180,13 +200,6 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
             placeholder="Group name"
-            className={`w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
-          />
-          <input
-            type="text"
-            value={groupImage}
-            onChange={(e) => setGroupImage(e.target.value)}
-            placeholder="Group image URL (optional)"
             className={`w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
           />
           <button
@@ -198,7 +211,7 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
           </button>
         </div>
       ) : (
-        <p className="mb-5 text-sm font-medium text-gray-800 dark:text-white/90">{activeChat.name}</p>
+        <p className="mb-5 text-center text-sm font-medium text-gray-800 dark:text-white/90">{activeChat.name}</p>
       )}
 
       <h5 className="mb-2 text-xs font-medium uppercase text-gray-500 dark:text-stone-400">
@@ -211,13 +224,7 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
 
           return (
             <li key={member.id} className="flex items-center gap-3 rounded-xl p-2">
-              <Image
-                src={member.image || "/images/user/user-01.jpg"}
-                alt={member.displayName}
-                width={36}
-                height={36}
-                className="rounded-full object-cover"
-              />
+              <UserAvatar src={member.image} name={member.displayName} size={36} />
               <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
                 {member.displayName} {isSelf && <span className="text-gray-400 dark:text-stone-500">(you)</span>}
               </span>
@@ -272,13 +279,7 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
                         disabled={invitingId === user.id}
                         className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-colors duration-150 hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-white/5"
                       >
-                        <Image
-                          src={user.image || "/images/user/user-01.jpg"}
-                          alt={user.displayName}
-                          width={36}
-                          height={36}
-                          className="rounded-full object-cover"
-                        />
+                        <UserAvatar src={user.image} name={user.displayName} size={36} />
                         <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
                           {user.displayName}
                         </span>

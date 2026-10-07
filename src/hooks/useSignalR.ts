@@ -98,6 +98,7 @@ export const useSignalR = (chatId: string | null, currentUserId?: string) => {
                 timestamp: message.sentAt || message.createdAt || message.timestamp,
                 status: normalizeMessageStatus(message.status),
                 type: message.type,
+                attachments: message.attachments || [],
                 sender: message.sender,
                 chat: message.chat,
               };
@@ -281,16 +282,20 @@ export const useSignalR = (chatId: string | null, currentUserId?: string) => {
   // Send a message via SignalR Hub (ChatHub.SendMessage)
   // Backend signature: Task<Message> SendMessage(string chatId, Message message)
   const sendMessage = useCallback(
-    async (content: string, senderId?: string) => {
+    async (content: string, senderId?: string, attachmentIds: string[] = []) => {
       if (!connection || !chatId || !isConnected) {
         throw new Error('Not connected to chat');
       }
 
       try {
-        // Match backend Message model (PascalCase properties)
-        const payload: { Content: string; SenderId?: string } = { Content: content };
+        // Match backend Message model (PascalCase properties). AttachmentIds are the
+        // ids of files already uploaded via POST /chat/{chatId}/files.
+        const payload: { Content: string; SenderId?: string; AttachmentIds?: string[] } = { Content: content };
         if (senderId) {
           payload.SenderId = senderId;
+        }
+        if (attachmentIds.length > 0) {
+          payload.AttachmentIds = attachmentIds;
         }
 
         console.log('📡 Sending message via SignalR hub SendMessage:', {

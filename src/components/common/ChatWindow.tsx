@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import NextImage from "next/image";
 import { Send, Paperclip, Mic, Image, FileText, Camera, Check, CheckCheck, Phone, EllipsisVertical, Info, Trash2, XCircle, Search, Smile, ChevronDown } from "lucide-react";
 import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from "emoji-picker-react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
@@ -9,7 +8,7 @@ import { useSignalR } from "@/hooks/useSignalR";
 import { usePresence } from "@/hooks/usePresence";
 import { useChatActivity } from "@/hooks/useChatActivity";
 import { getActivityLabel } from "@/utils/chatActivity";
-import { formatRelativeTime } from "@/utils/time";
+import { formatRelativeTime, dayKey, formatDayDivider } from "@/utils/time";
 import { useNow } from "@/hooks/useNow";
 import { HubConnectionState } from "@microsoft/signalr";
 import { getMessages } from "@/lib/api/message";
@@ -22,12 +21,27 @@ import { normalizeMessageStatus } from "@/utils/messageStatus";
 import { useChat } from "@/context/ChatContext";
 import { useModal } from "@/hooks/useModal";
 import GroupInfoModal from "./GroupInfoModal";
+import MessageAttachments from "./MessageAttachments";
+import PendingAttachments, { PendingFile } from "./PendingAttachments";
+import { uploadChatFiles, deleteFile } from "@/lib/api/file";
+import { mediaKey, putCachedMedia } from "@/lib/media/mediaCache";
+import { FileKind, MessageAttachment } from "@/types/file.models";
+import { acceptAttribute, getFileKind, validateFile } from "@/utils/file";
+import { createPreview } from "@/utils/preview";
+import { useUploadLimits } from "@/hooks/useUploadLimits";
+import CameraCaptureModal, { isCameraSupported } from "./CameraCaptureModal";
+import UserAvatar from "@/components/common/UserAvatar";
 
 interface ChatWindowProps {
   chatId: string;
 }
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
+
+// Pinned day pill: its sticky offset (keep in sync with its `top-3` class), and a
+// height with some slack so sliding it up by offset + height takes it fully out of view.
+const DAY_PILL_TOP = 12;
+const DAY_PILL_HEIGHT = 32;
 
 export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [message, setMessage] = useState("");
@@ -39,10 +53,20 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [unseenCount, setUnseenCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const lastScrollTopRef = useRef(0);
+  const dayPillShiftRef = useRef(0);
+  const pinnedDaySectionRef = useRef<HTMLElement | null>(null);
   const lastMessageCountRef = useRef(0);
   const lastActivitySentAtRef = useRef(0);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const uploadLimits = useUploadLimits();
   const currentUser = useAppSelector((state) => state.auth.user);
   const { theme } = useTheme();
   const { activeChat, setActiveChat } = useChat();
@@ -111,6 +135,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             isRead: msg.isRead,
             status: normalizeMessageStatus(msg.status),
             type: msg.type,
+            attachments: msg.attachments || [],
             // Keep nested objects for future use
             sender: msg.sender,
             chat: msg.chat,
@@ -203,9 +228,43 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     }
   }, [isPeerTyping, isAtBottom]);
 
+  // WhatsApp-style pinned day pill: scrolling down (towards newer messages) slides
+  // it up with the content until it's gone, scrolling up slides it back in. Done on
+  // the DOM directly — re-rendering the whole list on every scroll tick isn't worth it.
+  const updatePinnedDayPill = (el: HTMLDivElement) => {
+    const dy = el.scrollTop - lastScrollTopRef.current;
+    lastScrollTopRef.current = el.scrollTop;
+
+    // The pinned pill belongs to the day section currently crossing the pin line.
+    // Sticky `top` is measured from inside the list's padding, so include it.
+    const pinOffset = parseFloat(getComputedStyle(el).paddingTop) + DAY_PILL_TOP;
+    const pinLine = el.getBoundingClientRect().top + pinOffset;
+    let pinned: HTMLElement | null = null;
+    for (const section of el.querySelectorAll<HTMLElement>("[data-day-section]")) {
+      const rect = section.getBoundingClientRect();
+      if (rect.top < pinLine && rect.bottom > pinLine) {
+        pinned = section;
+        break;
+      }
+    }
+
+    // A new day took over the pin — it starts fully visible and only hides once
+    // the user keeps scrolling down past it.
+    if (pinned !== pinnedDaySectionRef.current) {
+      pinnedDaySectionRef.current?.querySelector<HTMLElement>("[data-day-pill]")?.style.removeProperty("transform");
+      pinnedDaySectionRef.current = pinned;
+      dayPillShiftRef.current = 0;
+    }
+
+    dayPillShiftRef.current = Math.min(Math.max(dayPillShiftRef.current + dy, 0), pinOffset + DAY_PILL_HEIGHT);
+    const pill = pinned?.querySelector<HTMLElement>("[data-day-pill]");
+    if (pill) pill.style.transform = `translateY(-${dayPillShiftRef.current}px)`;
+  };
+
   const handleMessageListScroll = () => {
     const el = messageListRef.current;
     if (!el) return;
+    updatePinnedDayPill(el);
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const atBottom = distanceFromBottom < 120;
     setIsAtBottom(atBottom);
@@ -238,7 +297,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   // message box and starts typing there, instead of requiring a click first.
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (sending || !isConnected) return;
+      if (sending || !isConnected || showCamera) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key.length !== 1) return; // letters, digits, symbols, space
 
@@ -257,7 +316,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [sending, isConnected]);
+  }, [sending, isConnected, showCamera]);
 
   const MessageStatus = ({ status }: { status?: string }) => {
     if (status === "seen") return <CheckCheck className="w-4 h-4 text-success-400" />;
@@ -265,48 +324,164 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     return null;
   };
 
-  const handleSendMessage = async () => {
-    if (!message.trim() || sending) return;
+  // Revoke preview object URLs of whatever is still pending when the chat closes/switches.
+  const pendingFilesRef = useRef<PendingFile[]>([]);
+  pendingFilesRef.current = pendingFiles;
+  useEffect(() => {
+    return () => {
+      pendingFilesRef.current.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+      setPendingFiles([]);
+    };
+  }, [chatId]);
 
-    const messageContent = message.trim();
-    console.log('📤 Sending message:', {
-      chatId,
-      content: messageContent,
-      senderId: currentUser?.id,
-      timestamp: new Date().toISOString()
+  const addPendingFiles = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+
+    const accepted: PendingFile[] = [];
+    // Unlimited until the server's limits load — the server rejects an oversized batch anyway.
+    const maxAttachments = uploadLimits?.maxFilesPerUpload ?? Infinity;
+    let room = maxAttachments - pendingFiles.length;
+
+    for (const file of Array.from(fileList)) {
+      const error = validateFile(file, uploadLimits);
+      if (error) {
+        showToast.error(error);
+        continue;
+      }
+
+      if (room <= 0) {
+        showToast.error(`You can attach at most ${maxAttachments} files per message.`);
+        break;
+      }
+
+      const kind = getFileKind(file.type);
+      accepted.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        kind,
+        previewUrl: kind === FileKind.Image || kind === FileKind.Video ? URL.createObjectURL(file) : undefined,
+      });
+      room--;
+    }
+
+    if (accepted.length > 0) {
+      setPendingFiles((prev) => [...prev, ...accepted]);
+      messageInputRef.current?.focus();
+    }
+  };
+
+  const removePendingFile = (id: string) => {
+    setPendingFiles((prev) => {
+      const removed = prev.find((f) => f.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((f) => f.id !== id);
     });
+  };
 
-    setMessage("");
+  /**
+   * Uploads files (if any) then sends the message through the hub. Shared by the composer
+   * and the camera. Resolves false if the upload failed — nothing was sent, so the caller
+   * keeps its text/files for a retry; onUploaded runs once it's safe to clear them.
+   */
+  const sendWithAttachments = async (
+    content: string,
+    files: File[],
+    options: { onProgress?: (percent: number) => void; onUploaded?: () => void } = {}
+  ): Promise<boolean> => {
     setSending(true);
 
-    // Optimistically add message to UI
+    // 1) Upload attachments first — they come back as Pending files whose ids are then
+    //    sent with the message.
+    let uploaded: MessageAttachment[] = [];
+
+    if (files.length > 0) {
+      options.onProgress?.(0);
+      try {
+        // Tiny blurred previews recipients see before choosing to download the files.
+        const previews = await Promise.all(files.map(createPreview));
+        const result = await uploadChatFiles(chatId, files, options.onProgress, previews);
+
+        // We already hold these files locally — cache them under the new file ids so the
+        // sender sees them instantly instead of downloading their own files again.
+        // (Results come back in the same order the files were sent.)
+        if (currentUser?.id) {
+          await Promise.all(result.map((f, i) => putCachedMedia(mediaKey(currentUser.id, f.id), files[i])));
+        }
+
+        uploaded = result.map((f) => ({
+          fileId: f.id,
+          fileName: f.fileName,
+          contentType: f.contentType,
+          sizeBytes: f.sizeBytes,
+          kind: f.kind,
+          isPrivate: f.isPrivate,
+          preview: f.preview,
+        }));
+      } catch (err) {
+        showToast.error(getErrorMessage(err));
+        setSending(false);
+        return false;
+      }
+    }
+
+    options.onUploaded?.();
+
+    // 2) Optimistically add the message to the UI
     const tempMessage: ChatMessage = {
       id: `temp-${Date.now()}`,
-      content: messageContent,
+      content,
       senderId: currentUser?.id || "",
       chatId: chatId,
       sentAt: new Date().toISOString(),
       timestamp: new Date().toISOString(),
       status: "sent",
+      attachments: uploaded,
     };
-    console.log('➕ Adding optimistic message to UI:', tempMessage);
     addMessage(tempMessage);
 
     try {
-      console.log('📡 Calling SignalR hub SendMessage...');
-      // Send via SignalR hub (which will save + broadcast to all clients)
-      await sendSignalRMessage(messageContent, currentUser?.id);
-      console.log(
-        '✅ Message sent successfully via SignalR hub; waiting for broadcast to update UI.'
-      );
+      // 3) Send via SignalR hub (which will save + broadcast to all clients)
+      await sendSignalRMessage(content, currentUser?.id, uploaded.map((a) => a.fileId));
     } catch (err) {
       console.error('❌ Error sending message via SignalR hub:', err);
       showToast.error(getErrorMessage(err));
-      // Remove failed message
+      // Remove failed message, and its now-orphaned uploads
       setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
+      uploaded.forEach((a) => deleteFile(a.fileId).catch(() => {}));
     } finally {
       setSending(false);
     }
+
+    return true;
+  };
+
+  const handleSendMessage = async () => {
+    if ((!message.trim() && pendingFiles.length === 0) || sending) return;
+
+    const filesToSend = pendingFiles;
+
+    await sendWithAttachments(message.trim(), filesToSend.map((f) => f.file), {
+      onProgress: setUploadProgress,
+      onUploaded: () => {
+        setMessage("");
+        filesToSend.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+        setPendingFiles([]);
+      },
+    });
+
+    setUploadProgress(null);
+  };
+
+  // A photo/video taken with the in-app camera goes straight out with its own caption,
+  // leaving whatever is in the composer untouched.
+  const handleCameraSend = (file: File, caption: string, onProgress: (percent: number) => void) =>
+    sendWithAttachments(caption, [file], { onProgress });
+
+  const openCamera = () => {
+    if (isCameraSupported()) setShowCamera(true);
+    // No camera API (old browser / insecure origin) — the native picker can still
+    // offer the camera on phones via the capture attribute.
+    else cameraInputRef.current?.click();
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
@@ -347,10 +522,16 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   };
 
   const attachmentOptions = [
-    { icon: Camera, label: "Camera", color: "text-success-500" },
-    { icon: Image, label: "Photo & Video", color: "text-[#1a7b9b] dark:text-[#60c7e3]" },
-    { icon: FileText, label: "Document", color: "text-theme-purple-500" },
+    { icon: Camera, label: "Camera", color: "text-success-500", onSelect: openCamera },
+    { icon: Image, label: "Photo & Video", color: "text-[#1a7b9b] dark:text-[#60c7e3]", onSelect: () => mediaInputRef.current?.click() },
+    { icon: FileText, label: "Document", color: "text-theme-purple-500", onSelect: () => documentInputRef.current?.click() },
   ];
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addPendingFiles(e.target.files);
+    // Reset so picking the same file again still fires onChange.
+    e.target.value = "";
+  };
 
   const chatDisplayName = activeChat?.name || "Chat";
   const isGroupChat = !!activeChat?.isGroupChat;
@@ -384,6 +565,25 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     participantsById.forEach((p, id) => map.set(id, p.displayName));
     return map;
   }, [participantsById]);
+
+  // Messages bucketed by calendar day. Each day renders as its own section so the
+  // day pill can be `sticky` within it — the pill pins while scrolling through that
+  // day and the next day's section pushes it out, WhatsApp-style. `index` stays the
+  // position in the flat list for sender grouping and the entry animation stagger.
+  const messageDays = useMemo(() => {
+    const days: { key: string; timestamp?: string; items: { msg: ChatMessage; index: number }[] }[] = [];
+    messages.forEach((msg, index) => {
+      const timestamp = msg.sentAt || msg.timestamp || msg.createdAt;
+      const key = dayKey(timestamp);
+      const last = days[days.length - 1];
+      if (last && last.key === key) {
+        last.items.push({ msg, index });
+      } else {
+        days.push({ key, timestamp, items: [{ msg, index }] });
+      }
+    });
+    return days;
+  }, [messages]);
 
   // A group has no single peer to report a status for — only surface something
   // when someone's actually typing, and name them since there's no single "the
@@ -420,9 +620,12 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
         {/* Left side (user info) */}
         <div className="flex items-center">
           <div className="relative mr-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]">
-              {chatDisplayName?.charAt(0) || "C"}
-            </div>
+            <UserAvatar
+              src={activeChat?.avatar}
+              name={chatDisplayName}
+              size={44}
+              className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]"
+            />
             {!isGroupChat && isPeerOnline && (
               <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
                 <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
@@ -518,85 +721,95 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             </div>
           ) : (
             <>
-              {messages.map((msg, index) => {
-                if (msg.type === BackendMessageType.Alert) {
-                  return (
-                    <div key={msg.id} className="my-3 flex justify-center">
-                      <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
-                        {ensureStringContent(msg.content)}
-                      </span>
-                    </div>
-                  );
-                }
+              {messageDays.map((day, dayIndex) => (
+                <section key={day.key || dayIndex} data-day-section className={dayIndex === 0 ? "" : "mt-2"}>
+                  <div data-day-pill className="pointer-events-none sticky top-3 z-10 mb-4 flex justify-center">
+                    <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 shadow-[0_1px_2px_rgba(16,24,40,.08)] backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
+                      {formatDayDivider(day.timestamp)}
+                    </span>
+                  </div>
 
-                const isOwn = msg.senderId === currentUser?.id;
-                const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
-                const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
+                  {day.items.map(({ msg, index }, itemIndex) => {
+                    // A new day also restarts the sender grouping — same as WhatsApp, the
+                    // name/avatar reappears after a day divider even mid-conversation.
+                    const isFirstOfDay = itemIndex === 0;
 
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
-                  >
-                    <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                      {!isOwn && (
-                        <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
-                          {senderAvatar ? (
-                            <NextImage src={senderAvatar} alt={getSenderName(msg)} width={32} height={32} className="h-full w-full object-cover" />
-                          ) : (
-                            getSenderName(msg)?.charAt(0) || "U"
-                          )}
+                    if (msg.type === BackendMessageType.Alert) {
+                      return (
+                        <div key={msg.id} className="my-3 flex justify-center">
+                          <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
+                            {ensureStringContent(msg.content)}
+                          </span>
                         </div>
-                      )}
+                      );
+                    }
 
-                      <div className="group relative">
-                        <div
-                          style={{
-                            borderRadius: bubbleRadius(isOwn, isFirstInGroup),
-                            animationDelay: `${Math.min(index, 8) * 40}ms`,
-                          }}
-                          className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
-                            isOwn
-                              ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
-                              : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
-                          }`}
-                        >
-                          {isGroupChat && !isOwn && isFirstInGroup && (
-                            <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
-                              {getSenderName(msg)}
-                            </p>
-                          )}
-                          <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
-                          <div className="mt-1 flex items-center justify-end gap-1">
-                            <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
-                              {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
+                    const isOwn = msg.senderId === currentUser?.id;
+                    const isFirstInGroup = isFirstOfDay || messages[index - 1].senderId !== msg.senderId;
+                    const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
+                      >
+                        <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+                          {!isOwn && (
+                            <span className="mb-1">
+                              <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
                             </span>
-                            {isOwn && <MessageStatus status={msg.status} />}
+                          )}
+
+                          <div className="group relative">
+                            <div
+                              style={{
+                                borderRadius: bubbleRadius(isOwn, isFirstInGroup),
+                                animationDelay: `${Math.min(index, 8) * 40}ms`,
+                              }}
+                              className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
+                                isOwn
+                                  ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
+                                  : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
+                              }`}
+                            >
+                              {isGroupChat && !isOwn && isFirstInGroup && (
+                                <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
+                                  {getSenderName(msg)}
+                                </p>
+                              )}
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className={ensureStringContent(msg.content) ? "mb-1.5" : ""}>
+                                  <MessageAttachments attachments={msg.attachments} isOwn={isOwn} />
+                                </div>
+                              )}
+                              {ensureStringContent(msg.content) && (
+                                <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
+                              )}
+                              <div className="mt-1 flex items-center justify-end gap-1">
+                                <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
+                                  {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
+                                </span>
+                                {isOwn && <MessageStatus status={msg.status} />}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
+                    );
+                  })}
+                </section>
+              ))}
 
               {isPeerTyping && (
                 <div className="mt-1 flex justify-start">
                   <div className="flex items-end gap-2">
-                    <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
-                      {(() => {
-                        const typingAvatar = getSenderAvatar(peerActivity!.userId);
-                        const typingInitial = (isGroupChat
-                          ? participantNames.get(peerActivity!.userId)
-                          : chatDisplayName
-                        )?.charAt(0);
-                        return typingAvatar ? (
-                          <NextImage src={typingAvatar} alt="" width={32} height={32} className="h-full w-full object-cover" />
-                        ) : (
-                          typingInitial || "U"
-                        );
-                      })()}
-                    </div>
+                    <span className="mb-1">
+                      <UserAvatar
+                        src={getSenderAvatar(peerActivity!.userId)}
+                        name={isGroupChat ? participantNames.get(peerActivity!.userId) : chatDisplayName}
+                        size={32}
+                      />
+                    </span>
                     <div className="flex items-center gap-1 rounded-[18px_18px_18px_6px] border border-gray-200/70 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524]">
                       <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0s" }} />
                       <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.16s" }} />
@@ -633,7 +846,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                 <button
                   key={index}
                   className={`flex items-center gap-3 rounded-[10px] px-3 py-2 text-left transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-stone-700`}
-                  onClick={() => setShowAttachments(false)}
+                  onClick={() => {
+                    setShowAttachments(false);
+                    option.onSelect();
+                  }}
                 >
                   <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 ${option.color}`}>
                     <option.icon className="h-4 w-4" />
@@ -644,6 +860,13 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             </div>
           </div>
         )}
+
+        {/* Hidden pickers behind the attachment menu options */}
+        <input ref={mediaInputRef} type="file" accept={acceptAttribute(uploadLimits, [FileKind.Image, FileKind.Video])} multiple onChange={handleFileInputChange} className="hidden" />
+        <input ref={documentInputRef} type="file" accept={acceptAttribute(uploadLimits, [FileKind.Document, FileKind.Audio])} multiple onChange={handleFileInputChange} className="hidden" />
+        <input ref={cameraInputRef} type="file" accept={acceptAttribute(uploadLimits, [FileKind.Image, FileKind.Video])} capture="environment" onChange={handleFileInputChange} className="hidden" />
+
+        <PendingAttachments files={pendingFiles} onRemove={removePendingFile} uploadProgress={uploadProgress} />
 
         {/* Chat input row */}
         <div
@@ -685,7 +908,14 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               notifyTyping();
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            onPaste={(e) => {
+              // Pasting a screenshot/image attaches it instead of doing nothing.
+              if (e.clipboardData.files.length > 0) {
+                e.preventDefault();
+                addPendingFiles(e.clipboardData.files);
+              }
+            }}
+            placeholder={pendingFiles.length > 0 ? "Add a caption..." : "Type a message..."}
             disabled={sending || !isConnected}
             className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none disabled:opacity-50 dark:text-white dark:placeholder-stone-500"
           />
@@ -703,7 +933,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
           <button
             onClick={handleSendMessage}
-            disabled={!message.trim() || sending || !isConnected}
+            disabled={(!message.trim() && pendingFiles.length === 0) || sending || !isConnected}
             aria-label="Send message"
             className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[0_10px_18px_-10px_rgba(26,123,155,.75)] transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[.94] disabled:pointer-events-none disabled:opacity-40`}
           >
@@ -711,6 +941,8 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           </button>
         </div>
       </div>
+
+      <CameraCaptureModal isOpen={showCamera} onClose={() => setShowCamera(false)} onSend={handleCameraSend} />
 
       {isGroupChat && (
         <GroupInfoModal isOpen={groupInfoModal.isOpen} onClose={groupInfoModal.closeModal} chatId={chatId} />

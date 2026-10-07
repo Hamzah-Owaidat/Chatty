@@ -1,3 +1,5 @@
+import { MessageAttachment } from '@/types/file.models';
+
 export interface ChatUser {
   id: string;
   userName: string;
@@ -27,6 +29,8 @@ export interface ChatMessage {
   // Alert messages are system events (e.g. "X has joined the chat") rendered as a
   // centered pill instead of a normal sender bubble.
   type?: BackendMessageType;
+  // Files sent with the message — a message may carry only attachments (empty content).
+  attachments?: MessageAttachment[];
   // Nested objects from API
   sender?: {
     id: string;
@@ -117,10 +121,10 @@ export interface ChatDetailsUpdatedDto {
   groupImage?: string | null;
 }
 
-// PATCH /api/chat/{chatId} body — only non-null fields are applied
+// PATCH /api/chat/{chatId} body — only non-null fields are applied. The group image is
+// changed through uploadGroupImage (POST /api/chat/{chatId}/image) instead.
 export interface UpdateChatDetailsDto {
   groupName?: string;
-  groupImage?: string;
 }
 
 // Generic wrapper for the backend's Result<T>/Result<IEnumerable<T>> envelope
