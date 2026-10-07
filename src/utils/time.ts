@@ -18,34 +18,3 @@ export const formatRelativeTime = (timestamp?: string): string => {
     return timestamp;
   }
 };
-
-// Calendar-day key (local time) for grouping messages into "Today" / "Yesterday" /
-// date sections, WhatsApp-style — two timestamps land in the same group iff this
-// key matches, regardless of time of day.
-export const dayKey = (timestamp?: string): string => {
-  if (!timestamp) return "";
-  const date = new Date(timestamp);
-  if (isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-};
-
-// Chat message-list day divider label: "Today", "Yesterday", or a full date —
-// with the year only shown when it isn't the current one.
-export const formatDayDivider = (timestamp?: string): string => {
-  if (!timestamp) return "";
-  const date = new Date(timestamp);
-  if (isNaN(date.getTime())) return "";
-
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
-
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "long",
-    year: sameYear ? undefined : "numeric",
-  });
-};

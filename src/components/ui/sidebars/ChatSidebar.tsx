@@ -36,7 +36,7 @@ interface ChatUserDisplay {
   unread: number;
   isGroupChat: boolean;
   groupImage?: string | null;
-  adminIds?: string[];
+  adminId?: string | null;
   participants: ChatParticipant[];
 }
 
@@ -128,7 +128,7 @@ const ChatSidebar = () => {
       unread: chat.unreadMessagesCount || 0,
       isGroupChat: !!chatInfo?.isGroupChat,
       groupImage: chatInfo?.groupImage,
-      adminIds: chatInfo?.adminIds,
+      adminId: chatInfo?.adminId,
       participants: chat.participants || [],
     };
   };
@@ -257,7 +257,7 @@ const ChatSidebar = () => {
       status: resolveStatus(user),
       isGroupChat: user.isGroupChat,
       groupImage: user.groupImage,
-      adminIds: user.adminIds,
+      adminId: user.adminId,
       participants: user.participants,
     });
   };
@@ -409,7 +409,7 @@ const ChatSidebar = () => {
               className={`flex-1 rounded-lg py-1.5 px-4 text-sm transition-all duration-200 ${EASE} active:scale-[.97] ${
                 activeTab === "messages"
                   ? "bg-white font-medium text-[#1a7b9b] shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-[#60c7e3]"
-                  : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+                  : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-stone-200"
               }`}
             >
               Messages
@@ -419,7 +419,7 @@ const ChatSidebar = () => {
               className={`flex-1 rounded-lg py-1.5 px-4 text-sm transition-all duration-200 ${EASE} active:scale-[.97] ${
                 activeTab === "unread"
                   ? "bg-white font-medium text-[#1a7b9b] shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-[#60c7e3]"
-                  : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+                  : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-stone-200"
               }`}
             >
               Unread

@@ -13,9 +13,8 @@ export type ActiveChatInfo = {
   isGroupChat?: boolean;
   groupImage?: string | null;
   // Only meaningful for group chats — lets ChatWindow/GroupInfoModal gate
-  // admin-only actions (add/remove participants, edit details, promote/demote)
-  // client-side. A group chat can have more than one admin.
-  adminIds?: string[];
+  // admin-only actions (add/remove participants, edit details) client-side.
+  adminId?: string | null;
   // Other members (caller excluded) — lets ChatWindow label senders on live
   // SignalR messages, which don't carry a nested sender object.
   participants?: ChatParticipant[];

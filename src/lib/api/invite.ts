@@ -24,7 +24,7 @@ export async function getOrCreateInviteLink(): Promise<ChatInviteInfo> {
 // Public preview info for a token — no auth required, safe for an unauthenticated visitor.
 export async function getInviteInfo(token: string): Promise<ChatInviteInfo> {
   try {
-    const response = await api.get(`/chat-invites/${encodeURIComponent(token)}`);
+    const response = await api.get(`/chat-invites/${token}`);
     return response.data.data;
   } catch (err: any) {
     if (err.response?.data) {
@@ -36,7 +36,7 @@ export async function getInviteInfo(token: string): Promise<ChatInviteInfo> {
 
 export async function acceptInvite(token: string): Promise<AcceptedInviteChat> {
   try {
-    const response = await api.post(`/chat-invites/${encodeURIComponent(token)}/accept`, null, { headers: authHeaders() });
+    const response = await api.post(`/chat-invites/${token}/accept`, null, { headers: authHeaders() });
     return response.data.data;
   } catch (err: any) {
     if (err.response?.data) {

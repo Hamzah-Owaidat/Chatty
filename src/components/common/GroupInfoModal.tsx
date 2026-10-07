@@ -1,10 +1,10 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Crown, LogOut, Search, ShieldMinus, ShieldPlus, UserPlus, UserMinus, Users } from "lucide-react";
+import { Crown, LogOut, Search, UserPlus, UserMinus, Users } from "lucide-react";
 import { Modal } from "../ui/modal";
 import { searchUsers } from "@/lib/api/user";
-import { removeParticipant, updateChatDetails, leaveChat, promoteParticipant, demoteParticipant } from "@/lib/api/chat";
+import { removeParticipant, updateChatDetails, leaveChat } from "@/lib/api/chat";
 import { sendChatRequest } from "@/lib/api/chatRequest";
 import { ChatParticipant } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
@@ -34,10 +34,9 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
-  const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const isAdmin = !!currentUser && !!activeChat?.adminIds?.includes(currentUser.id);
+  const isAdmin = !!currentUser && !!activeChat && activeChat.adminId === currentUser.id;
 
   useEffect(() => {
     if (isOpen) {
@@ -137,10 +136,9 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
   const handleRemove = async (user: ChatParticipant) => {
     setRemovingId(user.id);
     try {
-      const updated = await removeParticipant(chatId, user.id);
+      await removeParticipant(chatId, user.id);
       setActiveChat({
         ...activeChat,
-        adminIds: updated.adminIds,
         participants: (activeChat.participants || []).filter((p) => p.id !== user.id),
       });
       refreshChatList();
@@ -149,34 +147,6 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
       showToast.error(getErrorMessage(err));
     } finally {
       setRemovingId(null);
-    }
-  };
-
-  const handlePromote = async (user: ChatParticipant) => {
-    setRoleChangingId(user.id);
-    try {
-      const updated = await promoteParticipant(chatId, user.id);
-      setActiveChat({ ...activeChat, adminIds: updated.adminIds });
-      refreshChatList();
-      showToast.success(`${user.displayName} is now an admin`);
-    } catch (err) {
-      showToast.error(getErrorMessage(err));
-    } finally {
-      setRoleChangingId(null);
-    }
-  };
-
-  const handleDemote = async (user: ChatParticipant) => {
-    setRoleChangingId(user.id);
-    try {
-      const updated = await demoteParticipant(chatId, user.id);
-      setActiveChat({ ...activeChat, adminIds: updated.adminIds });
-      refreshChatList();
-      showToast.success(`${user.displayName} is no longer an admin`);
-    } catch (err) {
-      showToast.error(getErrorMessage(err));
-    } finally {
-      setRoleChangingId(null);
     }
   };
 
@@ -236,9 +206,8 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
       </h5>
       <ul className="mb-5 flex max-h-48 flex-col gap-1 overflow-y-auto">
         {members.map((member) => {
-          const isThisAdmin = !!activeChat.adminIds?.includes(member.id);
+          const isThisAdmin = member.id === activeChat.adminId;
           const isSelf = member.id === currentUser?.id;
-          const isChangingRole = roleChangingId === member.id;
 
           return (
             <li key={member.id} className="flex items-center gap-3 rounded-xl p-2">
@@ -257,36 +226,15 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
                   <Crown size={12} /> Admin
                 </span>
               )}
-              {isAdmin && !isSelf && (
-                <span className="flex shrink-0 items-center gap-1">
-                  {isThisAdmin ? (
-                    <button
-                      onClick={() => handleDemote(member)}
-                      disabled={isChangingRole}
-                      aria-label={`Remove admin from ${member.displayName}`}
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-warning-600 transition-colors hover:bg-warning-400/10 disabled:opacity-50 dark:text-warning-400"
-                    >
-                      <ShieldMinus size={15} />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handlePromote(member)}
-                      disabled={isChangingRole}
-                      aria-label={`Make ${member.displayName} an admin`}
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-[#1a7b9b] transition-colors hover:bg-[#1a7b9b]/10 disabled:opacity-50 dark:text-[#60c7e3]"
-                    >
-                      <ShieldPlus size={15} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleRemove(member)}
-                    disabled={removingId === member.id}
-                    aria-label={`Remove ${member.displayName}`}
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-error-500 transition-colors hover:bg-error-500/10 disabled:opacity-50"
-                  >
-                    <UserMinus size={15} />
-                  </button>
-                </span>
+              {isAdmin && !isThisAdmin && (
+                <button
+                  onClick={() => handleRemove(member)}
+                  disabled={removingId === member.id}
+                  aria-label={`Remove ${member.displayName}`}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-error-500 transition-colors hover:bg-error-500/10 disabled:opacity-50"
+                >
+                  <UserMinus size={15} />
+                </button>
               )}
             </li>
           );
