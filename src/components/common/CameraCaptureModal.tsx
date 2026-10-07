@@ -6,7 +6,6 @@ import { maxFileSizeLabel, validateFile } from "@/utils/file";
 import { useUploadLimits } from "@/hooks/useUploadLimits";
 
 type CaptureMode = "photo" | "video";
-type Facing = "user" | "environment";
 
 interface CapturedMedia {
   file: File;
@@ -36,6 +35,27 @@ const RECORDER_TYPES = [
 
 const pickRecorderType = () =>
   typeof MediaRecorder === "undefined" ? undefined : RECORDER_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
+
+// Remembered camera choice — per browser, so it's a convenience only; storage can be
+// unavailable (private mode, blocked site data), in which case the browser just picks.
+const CAMERA_STORAGE_KEY = "chatty.cameraDeviceId";
+
+function readStoredCamera(): string | null {
+  try {
+    return localStorage.getItem(CAMERA_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeCamera(deviceId: string | null) {
+  try {
+    if (deviceId) localStorage.setItem(CAMERA_STORAGE_KEY, deviceId);
+    else localStorage.removeItem(CAMERA_STORAGE_KEY);
+  } catch {
+    // Not remembered — the user can switch again next time.
+  }
+}
 
 export const isCameraSupported = () =>
   typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
@@ -78,10 +98,14 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   const [mode, setMode] = useState<CaptureMode>("photo");
-  const [facing, setFacing] = useState<Facing>("environment");
+  // A chosen camera, by device id. Null = let the browser pick (back camera on phones).
+  const [deviceId, setDeviceId] = useState<string | null>(readStoredCamera);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [mirrored, setMirrored] = useState(false);
+  // The camera actually streaming — the browser may have picked it, so it can differ from deviceId.
+  const activeDeviceIdRef = useRef<string | undefined>(undefined);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [canSwitch, setCanSwitch] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [captured, setCaptured] = useState<CapturedMedia | null>(null);
@@ -99,11 +123,26 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
     setError(null);
 
     (async () => {
-      const video = { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } };
+      const video: MediaTrackConstraints = {
+        // facingMode only means something on phones — laptop webcams ignore it, so
+        // switching cameras has to go by device id to reach e.g. the real webcam
+        // instead of a virtual one.
+        ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }),
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
       try {
         try {
           acquired = await navigator.mediaDevices.getUserMedia({ video, audio: mode === "video" });
         } catch (err) {
+          // The remembered camera is gone (unplugged, virtual camera uninstalled) — let the browser pick.
+          if (deviceId && err instanceof DOMException && (err.name === "OverconstrainedError" || err.name === "NotFoundError")) {
+            if (!cancelled) {
+              storeCamera(null);
+              setDeviceId(null);
+            }
+            return;
+          }
           // No microphone (or mic denied) shouldn't block silent video.
           if (mode !== "video") throw err;
           acquired = await navigator.mediaDevices.getUserMedia({ video, audio: false });
@@ -113,10 +152,14 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
           acquired.getTracks().forEach((t) => t.stop());
           return;
         }
+        const settings = acquired.getVideoTracks()[0]?.getSettings();
+        activeDeviceIdRef.current = settings?.deviceId;
+        setMirrored(settings?.facingMode === "user");
         setStream(acquired);
 
+        // Device labels/ids are only fully exposed once permission is granted, so list after.
         const devices = await navigator.mediaDevices.enumerateDevices();
-        if (!cancelled) setCanSwitch(devices.filter((d) => d.kind === "videoinput").length > 1);
+        if (!cancelled) setCameras(devices.filter((d) => d.kind === "videoinput" && d.deviceId));
       } catch (err) {
         if (!cancelled) setError(describeCameraError(err));
       }
@@ -127,7 +170,18 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
       acquired?.getTracks().forEach((t) => t.stop());
       setStream(null);
     };
-  }, [isOpen, mode, facing, captured]);
+  }, [isOpen, mode, deviceId, captured]);
+
+  const canSwitch = cameras.length > 1;
+
+  // Cycle to the next camera and remember it, so a working pick sticks across sessions.
+  const switchCamera = () => {
+    if (!canSwitch) return;
+    const current = cameras.findIndex((c) => c.deviceId === activeDeviceIdRef.current);
+    const next = cameras[(current + 1) % cameras.length].deviceId;
+    storeCamera(next);
+    setDeviceId(next);
+  };
 
   useEffect(() => {
     const video = videoRef.current;
@@ -265,7 +319,6 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
   if (!isOpen) return null;
 
   const sending = sendProgress !== null;
-  const mirrored = facing === "user";
 
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex flex-col bg-black text-white">
@@ -289,7 +342,7 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
         {!captured && canSwitch && !recording ? (
           <button
             type="button"
-            onClick={() => setFacing((f) => (f === "user" ? "environment" : "user"))}
+            onClick={switchCamera}
             aria-label="Switch camera"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
           >

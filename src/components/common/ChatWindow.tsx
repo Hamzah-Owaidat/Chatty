@@ -8,7 +8,7 @@ import { useSignalR } from "@/hooks/useSignalR";
 import { usePresence } from "@/hooks/usePresence";
 import { useChatActivity } from "@/hooks/useChatActivity";
 import { getActivityLabel } from "@/utils/chatActivity";
-import { formatRelativeTime } from "@/utils/time";
+import { formatRelativeTime, dayKey, formatDayDivider } from "@/utils/time";
 import { useNow } from "@/hooks/useNow";
 import { HubConnectionState } from "@microsoft/signalr";
 import { getMessages } from "@/lib/api/message";
@@ -38,6 +38,11 @@ interface ChatWindowProps {
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 
+// Pinned day pill: its sticky offset (keep in sync with its `top-3` class), and a
+// height with some slack so sliding it up by offset + height takes it fully out of view.
+const DAY_PILL_TOP = 12;
+const DAY_PILL_HEIGHT = 32;
+
 export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [message, setMessage] = useState("");
   const [showAttachments, setShowAttachments] = useState(false);
@@ -48,6 +53,9 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [unseenCount, setUnseenCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const lastScrollTopRef = useRef(0);
+  const dayPillShiftRef = useRef(0);
+  const pinnedDaySectionRef = useRef<HTMLElement | null>(null);
   const lastMessageCountRef = useRef(0);
   const lastActivitySentAtRef = useRef(0);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -220,9 +228,43 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     }
   }, [isPeerTyping, isAtBottom]);
 
+  // WhatsApp-style pinned day pill: scrolling down (towards newer messages) slides
+  // it up with the content until it's gone, scrolling up slides it back in. Done on
+  // the DOM directly — re-rendering the whole list on every scroll tick isn't worth it.
+  const updatePinnedDayPill = (el: HTMLDivElement) => {
+    const dy = el.scrollTop - lastScrollTopRef.current;
+    lastScrollTopRef.current = el.scrollTop;
+
+    // The pinned pill belongs to the day section currently crossing the pin line.
+    // Sticky `top` is measured from inside the list's padding, so include it.
+    const pinOffset = parseFloat(getComputedStyle(el).paddingTop) + DAY_PILL_TOP;
+    const pinLine = el.getBoundingClientRect().top + pinOffset;
+    let pinned: HTMLElement | null = null;
+    for (const section of el.querySelectorAll<HTMLElement>("[data-day-section]")) {
+      const rect = section.getBoundingClientRect();
+      if (rect.top < pinLine && rect.bottom > pinLine) {
+        pinned = section;
+        break;
+      }
+    }
+
+    // A new day took over the pin — it starts fully visible and only hides once
+    // the user keeps scrolling down past it.
+    if (pinned !== pinnedDaySectionRef.current) {
+      pinnedDaySectionRef.current?.querySelector<HTMLElement>("[data-day-pill]")?.style.removeProperty("transform");
+      pinnedDaySectionRef.current = pinned;
+      dayPillShiftRef.current = 0;
+    }
+
+    dayPillShiftRef.current = Math.min(Math.max(dayPillShiftRef.current + dy, 0), pinOffset + DAY_PILL_HEIGHT);
+    const pill = pinned?.querySelector<HTMLElement>("[data-day-pill]");
+    if (pill) pill.style.transform = `translateY(-${dayPillShiftRef.current}px)`;
+  };
+
   const handleMessageListScroll = () => {
     const el = messageListRef.current;
     if (!el) return;
+    updatePinnedDayPill(el);
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const atBottom = distanceFromBottom < 120;
     setIsAtBottom(atBottom);
@@ -524,6 +566,25 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     return map;
   }, [participantsById]);
 
+  // Messages bucketed by calendar day. Each day renders as its own section so the
+  // day pill can be `sticky` within it — the pill pins while scrolling through that
+  // day and the next day's section pushes it out, WhatsApp-style. `index` stays the
+  // position in the flat list for sender grouping and the entry animation stagger.
+  const messageDays = useMemo(() => {
+    const days: { key: string; timestamp?: string; items: { msg: ChatMessage; index: number }[] }[] = [];
+    messages.forEach((msg, index) => {
+      const timestamp = msg.sentAt || msg.timestamp || msg.createdAt;
+      const key = dayKey(timestamp);
+      const last = days[days.length - 1];
+      if (last && last.key === key) {
+        last.items.push({ msg, index });
+      } else {
+        days.push({ key, timestamp, items: [{ msg, index }] });
+      }
+    });
+    return days;
+  }, [messages]);
+
   // A group has no single peer to report a status for — only surface something
   // when someone's actually typing, and name them since there's no single "the
   // other person" to imply it.
@@ -660,70 +721,84 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             </div>
           ) : (
             <>
-              {messages.map((msg, index) => {
-                if (msg.type === BackendMessageType.Alert) {
-                  return (
-                    <div key={msg.id} className="my-3 flex justify-center">
-                      <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
-                        {ensureStringContent(msg.content)}
-                      </span>
-                    </div>
-                  );
-                }
+              {messageDays.map((day, dayIndex) => (
+                <section key={day.key || dayIndex} data-day-section className={dayIndex === 0 ? "" : "mt-2"}>
+                  <div data-day-pill className="pointer-events-none sticky top-3 z-10 mb-4 flex justify-center">
+                    <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 shadow-[0_1px_2px_rgba(16,24,40,.08)] backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
+                      {formatDayDivider(day.timestamp)}
+                    </span>
+                  </div>
 
-                const isOwn = msg.senderId === currentUser?.id;
-                const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
-                const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
+                  {day.items.map(({ msg, index }, itemIndex) => {
+                    // A new day also restarts the sender grouping — same as WhatsApp, the
+                    // name/avatar reappears after a day divider even mid-conversation.
+                    const isFirstOfDay = itemIndex === 0;
 
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
-                  >
-                    <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                      {!isOwn && (
-                        <span className="mb-1">
-                          <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
-                        </span>
-                      )}
+                    if (msg.type === BackendMessageType.Alert) {
+                      return (
+                        <div key={msg.id} className="my-3 flex justify-center">
+                          <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
+                            {ensureStringContent(msg.content)}
+                          </span>
+                        </div>
+                      );
+                    }
 
-                      <div className="group relative">
-                        <div
-                          style={{
-                            borderRadius: bubbleRadius(isOwn, isFirstInGroup),
-                            animationDelay: `${Math.min(index, 8) * 40}ms`,
-                          }}
-                          className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
-                            isOwn
-                              ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
-                              : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
-                          }`}
-                        >
-                          {isGroupChat && !isOwn && isFirstInGroup && (
-                            <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
-                              {getSenderName(msg)}
-                            </p>
-                          )}
-                          {msg.attachments && msg.attachments.length > 0 && (
-                              <div className={ensureStringContent(msg.content) ? "mb-1.5" : ""}>
-                                <MessageAttachments attachments={msg.attachments} isOwn={isOwn} />
-                              </div>
-                          )}
-                          {ensureStringContent(msg.content) && (
-                              <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
-                          )}
-                          <div className="mt-1 flex items-center justify-end gap-1">
-                            <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
-                              {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
+                    const isOwn = msg.senderId === currentUser?.id;
+                    const isFirstInGroup = isFirstOfDay || messages[index - 1].senderId !== msg.senderId;
+                    const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
+
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
+                      >
+                        <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+                          {!isOwn && (
+                            <span className="mb-1">
+                              <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
                             </span>
-                            {isOwn && <MessageStatus status={msg.status} />}
+                          )}
+
+                          <div className="group relative">
+                            <div
+                              style={{
+                                borderRadius: bubbleRadius(isOwn, isFirstInGroup),
+                                animationDelay: `${Math.min(index, 8) * 40}ms`,
+                              }}
+                              className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
+                                isOwn
+                                  ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
+                                  : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
+                              }`}
+                            >
+                              {isGroupChat && !isOwn && isFirstInGroup && (
+                                <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
+                                  {getSenderName(msg)}
+                                </p>
+                              )}
+                              {msg.attachments && msg.attachments.length > 0 && (
+                                <div className={ensureStringContent(msg.content) ? "mb-1.5" : ""}>
+                                  <MessageAttachments attachments={msg.attachments} isOwn={isOwn} />
+                                </div>
+                              )}
+                              {ensureStringContent(msg.content) && (
+                                <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
+                              )}
+                              <div className="mt-1 flex items-center justify-end gap-1">
+                                <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
+                                  {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
+                                </span>
+                                {isOwn && <MessageStatus status={msg.status} />}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
+                    );
+                  })}
+                </section>
+              ))}
 
               {isPeerTyping && (
                 <div className="mt-1 flex justify-start">
