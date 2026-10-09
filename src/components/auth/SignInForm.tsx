@@ -4,18 +4,20 @@ import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import { Button } from "lebify-ui";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, CircleAlert, Send } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { loginUser } from "@/store/slices/authSlice";
+import { loginUser, LoginRejection } from "@/store/slices/authSlice";
 import { unwrapResult } from "@reduxjs/toolkit";
 import { getErrorMessage } from "@/utils/error";
 import { LoginCredentials } from "@/types/auth/auth.models";
+import { resendConfirmationEmail } from "@/lib/api/auth";
 import { showToast } from "@/utils/toast";
 import { getSafeRedirect } from "@/utils/redirect";
 import Image from "next/image";
+import { emailPattern, errorInputClass } from "./shared";
 
 interface SignInFormErrors {
   userName?: string;
@@ -31,6 +33,14 @@ export default function SignInForm() {
   const [formData, setFormData] = useState({ userName: "", password: "" });
   const [errors, setErrors] = useState<SignInFormErrors>({});
 
+  // Shown when login fails with 403 (email not confirmed yet) — login only
+  // takes a username, so we ask for the email again to resend confirmation.
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendEmailError, setResendEmailError] = useState<string | undefined>();
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
@@ -38,11 +48,14 @@ export default function SignInForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    setNeedsConfirmation(false);
+    setResent(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    setNeedsConfirmation(false);
 
     const newErrors: SignInFormErrors = {};
     if (!formData.userName) newErrors.userName = "Username is required";
@@ -60,7 +73,41 @@ export default function SignInForm() {
       showToast.success("Logged in successfully!");
       router.push(getSafeRedirect(searchParams.get("redirect"), "/chat"));
     } catch (err) {
+      const rejection = err as LoginRejection | undefined;
+      if (rejection?.statusCode === 403) {
+        setNeedsConfirmation(true);
+      } else {
+        showToast.error(getErrorMessage(err));
+      }
+    }
+  };
+
+  const submitResend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResendEmailError(undefined);
+
+    if (!resendEmail) {
+      setResendEmailError("Email is required");
+      return;
+    }
+    if (!emailPattern.test(resendEmail)) {
+      setResendEmailError("Please enter a valid email address");
+      return;
+    }
+
+    setResending(true);
+    try {
+      const res = await resendConfirmationEmail({ email: resendEmail });
+      if (!res.isSuccess) {
+        showToast.error(res.error || "Failed to resend confirmation email");
+        return;
+      }
+      setResent(true);
+      showToast.success(res.message || "A new confirmation email has been sent. Please check your inbox.");
+    } catch (err) {
       showToast.error(getErrorMessage(err));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -188,7 +235,7 @@ export default function SignInForm() {
                 </label>
               </div>
               <Link
-                href="/auth/reset-password"
+                href="/auth/forgot-password"
                 className="text-sm text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]"
               >
                 Forgot password?
@@ -212,6 +259,54 @@ export default function SignInForm() {
               </Button>
             </div>
           </form>
+
+          {needsConfirmation && (
+            <div className="mt-5 rounded-2xl border border-warning-400/40 bg-warning-50 px-4 py-3.5 dark:border-warning-400/25 dark:bg-warning-400/10">
+              <div className="flex items-start gap-2.5">
+                <CircleAlert size={16} className="mt-0.5 shrink-0 text-warning-500 dark:text-warning-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                    Please confirm your email before logging in.
+                  </p>
+
+                  {resent ? (
+                    <p className="mt-2 text-sm text-gray-600 dark:text-stone-300">
+                      A new confirmation email is on its way to{" "}
+                      <span className="font-medium">{resendEmail}</span>.
+                    </p>
+                  ) : (
+                    <form onSubmit={submitResend} className="mt-3 space-y-2.5">
+                      <Input
+                        type="text"
+                        name="resendEmail"
+                        value={resendEmail}
+                        onChange={(e) => setResendEmail(e.target.value)}
+                        placeholder="Enter the email you registered with"
+                        className={resendEmailError ? errorInputClass : undefined}
+                        error={!!resendEmailError}
+                        success={!resendEmailError}
+                      />
+                      {resendEmailError && <p className="text-error-500 text-xs">{resendEmailError}</p>}
+                      <Button
+                        type="submit"
+                        variant="sea"
+                        size="small"
+                        loading={resending}
+                        loadingPosition="right"
+                        loadingSpinner="circle"
+                        hideTextWhenLoading
+                        icon={<Send size={14} />}
+                        iconPosition="right"
+                        className={`rounded-xl! bg-gradient-to-br! from-[#1f88aa] via-[#1a7b9b] to-[#17708d] ${EASE}`}
+                      >
+                        Resend confirmation email
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-5">
             <p className="text-sm text-center text-gray-700 dark:text-gray-400 sm:text-start">
