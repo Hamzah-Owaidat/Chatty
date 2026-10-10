@@ -3,17 +3,18 @@ import Checkbox from "@/components/form/input/Checkbox";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
-import { CircleAlert, ArrowRight } from "lucide-react";
+import { CircleAlert, ArrowRight, MailCheck, Send } from "lucide-react";
 import { Button } from "lebify-ui";
 import Link from "next/link";
 import React, { useState } from "react";
-import { register } from "@/lib/api/auth";
-import { useRouter, useSearchParams } from "next/navigation";
+import { register, resendConfirmationEmail } from "@/lib/api/auth";
+import { useSearchParams } from "next/navigation";
 import { RegisterData } from "@/types/auth/auth.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { getSafeRedirect } from "@/utils/redirect";
 import ThemeResponsiveLogo from "@/components/common/ThemeResponsiveLogo";
+import { maskEmail, primaryButtonClass } from "./shared";
 
 interface SignUpFormErrors {
   userName?: string;
@@ -36,7 +37,6 @@ const ErrorRow = ({ message }: { message: string }) => (
 );
 
 export default function SignUpForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
@@ -49,6 +49,9 @@ export default function SignUpForm() {
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<SignUpFormErrors>({});
+  const [registered, setRegistered] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -94,7 +97,9 @@ export default function SignUpForm() {
         showToast.error(res.error || "Registration failed");
         return;
       }
-      router.push(signInHref);
+      // Registration no longer auto-logs in — the account must confirm its
+      // email first, so show a "check your inbox" screen instead of signing in.
+      setRegistered(true);
     } catch (err) {
       showToast.error(getErrorMessage(err));
     } finally {
@@ -102,8 +107,25 @@ export default function SignUpForm() {
     }
   };
 
-  // Registration doesn't auto-login (see handleSubmit) — carry any `?redirect=` through
-  // to the sign-in page so it isn't lost when they land there next.
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      const res = await resendConfirmationEmail({ email: formData.email });
+      if (!res.isSuccess) {
+        showToast.error(res.error || "Failed to resend confirmation email");
+        return;
+      }
+      setResent(true);
+      showToast.success(res.message || "A new confirmation email has been sent. Please check your inbox.");
+    } catch (err) {
+      showToast.error(getErrorMessage(err));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // Carry any `?redirect=` through to the sign-in page so it isn't lost
+  // once the account confirms its email and signs in.
   const redirectParam = getSafeRedirect(searchParams.get("redirect"), "");
   const signInHref = redirectParam
     ? `/auth/signin?redirect=${encodeURIComponent(redirectParam)}`
@@ -125,6 +147,59 @@ export default function SignUpForm() {
     ? "Use 8+ characters"
     : "Strong password";
   const strengthFilledClass = strengthScore >= 3 ? "bg-success-500 dark:bg-success-400" : "bg-warning-400";
+
+  if (registered) {
+    return (
+      <div className="flex w-full flex-col lg:w-[58%]">
+        <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#1a7b9b]/25 bg-[#1a7b9b]/10 text-[#1a7b9b] dark:border-[#2596bb]/30 dark:bg-[#2596bb]/15 dark:text-[#60c7e3]">
+            <MailCheck size={22} />
+          </div>
+          <h1 className="mb-2 text-[30px] font-semibold -tracking-[.02em] text-gray-800 dark:text-white/90">
+            Check your inbox
+          </h1>
+          <p className="mb-6 text-sm text-gray-500 dark:text-stone-400">
+            We sent a confirmation link to{" "}
+            <span className="font-medium text-gray-700 dark:text-gray-200">{maskEmail(formData.email)}</span>.
+            Confirm your email before you can log in.
+          </p>
+
+          {resent ? (
+            <p className="text-sm text-gray-500 dark:text-stone-400">
+              A new confirmation email is on its way.
+            </p>
+          ) : (
+            <Button
+              type="button"
+              variant="sea"
+              loading={resending}
+              loadingPosition="right"
+              loadingSpinner="circle"
+              hideTextWhenLoading
+              icon={<Send size={17} />}
+              iconPosition="right"
+              className={primaryButtonClass}
+              onClick={handleResend}
+            >
+              Resend confirmation email
+            </Button>
+          )}
+
+          <div className="mt-5">
+            <p className="text-sm text-center text-gray-700 dark:text-gray-400 sm:text-start">
+              Already confirmed?{" "}
+              <Link
+                href={signInHref}
+                className="font-medium text-[#1a7b9b] underline underline-offset-2 hover:text-[#15657d] dark:text-[#60c7e3]"
+              >
+                Sign In
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col overflow-y-auto no-scrollbar py-12 lg:w-[58%]">

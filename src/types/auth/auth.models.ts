@@ -12,7 +12,25 @@ export interface RegisterData {
   password: string;
 }
 
-// Base API response
+export interface ConfirmEmailPayload {
+  token: string;
+}
+
+export interface ResendConfirmationPayload {
+  email: string;
+}
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}
+
+// Base API response (Result<T>)
 export interface ApiResponse<T> {
   isSuccess: boolean;
   statusCode: number;
@@ -20,7 +38,15 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+// Non-generic Result — no data payload, just a human-readable message
+export interface MessageResponse {
+  isSuccess: boolean;
+  statusCode: number;
+  error: string | null;
+  message: string | null;
+}
+
 export type LoginResponse = ApiResponse<string | null>;
 
-// Register response (data = Token only)
-export type RegisterResponse = ApiResponse<string | null>;
+// Register no longer auto-logs in — backend returns a message, not a token
+export type RegisterResponse = MessageResponse;
