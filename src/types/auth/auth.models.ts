@@ -13,6 +13,7 @@ export interface RegisterData {
 }
 
 export interface ConfirmEmailPayload {
+  userId: string;
   token: string;
 }
 
@@ -25,6 +26,7 @@ export interface ForgotPasswordPayload {
 }
 
 export interface ResetPasswordPayload {
+  userId: string;
   token: string;
   newPassword: string;
   confirmNewPassword: string;

@@ -15,6 +15,7 @@ type Status = "confirming" | "success" | "error";
 
 export default function ConfirmEmailForm() {
   const searchParams = useSearchParams();
+  const userId = searchParams.get("userId");
   const token = searchParams.get("token");
 
   const [status, setStatus] = useState<Status>("confirming");
@@ -30,7 +31,7 @@ export default function ConfirmEmailForm() {
     if (ranRef.current) return;
     ranRef.current = true;
 
-    if (!token) {
+    if (!userId || !token) {
       setStatus("error");
       setErrorMessage("This confirmation link is invalid or has expired.");
       return;
@@ -38,7 +39,7 @@ export default function ConfirmEmailForm() {
 
     (async () => {
       try {
-        const res = await confirmEmail({ token });
+        const res = await confirmEmail({ userId, token });
         if (!res.isSuccess) {
           setStatus("error");
           setErrorMessage(res.error || "This confirmation link is invalid or has expired.");
@@ -50,7 +51,7 @@ export default function ConfirmEmailForm() {
         setErrorMessage(getErrorMessage(err));
       }
     })();
-  }, [token]);
+  }, [userId, token]);
 
   const submitResend = async (e: React.FormEvent) => {
     e.preventDefault();

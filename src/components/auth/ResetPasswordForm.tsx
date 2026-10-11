@@ -21,6 +21,7 @@ import {
 export default function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const userId = searchParams.get("userId");
   const token = searchParams.get("token");
 
   const [passwords, setPasswords] = useState({ newPassword: "", confirmNewPassword: "" });
@@ -56,7 +57,7 @@ export default function ResetPasswordForm() {
 
     setResetting(true);
     try {
-      await resetPassword({ token: token || "", ...passwords });
+      await resetPassword({ userId: userId || "", token: token || "", ...passwords });
       showToast.success("Your password has been reset. You can now log in with your new password.");
       router.push("/auth/signin");
     } catch (err) {
@@ -66,7 +67,7 @@ export default function ResetPasswordForm() {
     }
   };
 
-  if (!token) {
+  if (!userId || !token) {
     return (
       <div className="flex w-full flex-col lg:w-[58%]">
         <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center">
