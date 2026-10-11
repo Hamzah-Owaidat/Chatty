@@ -1,14 +1,15 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { setAuthToken, getSavedToken } from "@/utils/authToken";
-import {
-  login as loginApi,
-  register as registerApi,
-  getCurrentUser,
-} from "@/lib/api/auth";
-import { LoginCredentials, RegisterData, LoginResponse, RegisterResponse } from "@/types/auth/auth.models";
+import { login as loginApi, getCurrentUser } from "@/lib/api/auth";
+import { LoginCredentials, LoginResponse } from "@/types/auth/auth.models";
 import { AuthState } from "@/types/auth/auth.state";
 import { User } from "@/types/user";
 import { getErrorMessage } from "@/utils/error";
+
+export interface LoginRejection {
+  message: string;
+  statusCode?: number;
+}
 
 // Initialize auth on app start
 export const initializeAuth = createAsyncThunk<
@@ -34,52 +35,25 @@ export const initializeAuth = createAsyncThunk<
 export const loginUser = createAsyncThunk<
   { user: User; token: string },
   LoginCredentials,
-  { rejectValue: string }
+  { rejectValue: LoginRejection }
 >("auth/login", async (credentials, thunkAPI) => {
   try {
     const res: LoginResponse = await loginApi(credentials);
 
     if (!res.isSuccess || !res.data)
-      return thunkAPI.rejectWithValue(res.error || "Login failed");
+      return thunkAPI.rejectWithValue({ message: res.error || "Login failed", statusCode: res.statusCode });
 
     const token = res.data; // ✅ res.data is the token string
     setAuthToken(token);
 
     // Fetch the user after setting the token
-    const userRes = await getCurrentUser(); 
-    if (!userRes.data) return thunkAPI.rejectWithValue("Failed to fetch user");
+    const userRes = await getCurrentUser();
+    if (!userRes.data) return thunkAPI.rejectWithValue({ message: "Failed to fetch user" });
 
     return { user: userRes.data, token };
   } catch (err) {
-    return thunkAPI.rejectWithValue(getErrorMessage(err));
-  }
-});
-
-
-
-// Register user
-export const registerUser = createAsyncThunk<
-  { user?: User; token: string },
-  RegisterData,
-  { rejectValue: string }
->("auth/register", async (data, thunkAPI) => {
-  try {
-    const res: RegisterResponse = await registerApi(data);
-
-    if (!res.isSuccess) return thunkAPI.rejectWithValue(res.error || "Registration failed");
-
-    const token = res.data ?? "";
-    setAuthToken(token);
-
-    try {
-      const userResponse = await getCurrentUser();
-      return { user: userResponse.data, token };
-    } catch {
-      return { user: undefined, token };
-    }
-  } catch (err) {
-    const message = getErrorMessage(err);
-    return thunkAPI.rejectWithValue(message);
+    const statusCode = (err as { statusCode?: number } | undefined)?.statusCode;
+    return thunkAPI.rejectWithValue({ message: getErrorMessage(err), statusCode });
   }
 });
 
@@ -161,22 +135,9 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = "failed";
-        state.error = action.payload ?? "Login failed";
+        state.error = action.payload?.message ?? "Login failed";
       })
-      
-      // Register
-      .addCase(registerUser.pending, (state) => { state.status = "loading"; state.error = null; })
-      .addCase(registerUser.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        state.user = action.payload.user ?? null;
-        state.token = action.payload.token;
-        state.error = null;
-      })
-      .addCase(registerUser.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload ?? "Registration failed";
-      })
-      
+
       // Fetch current user
       .addCase(fetchCurrentUser.pending, (state) => { state.status = "loading"; })
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {

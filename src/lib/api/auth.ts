@@ -1,19 +1,30 @@
 import axios from 'axios';
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
-import { LoginCredentials, RegisterData } from '@/types/auth/auth.models';
+import {
+  LoginCredentials,
+  RegisterData,
+  ConfirmEmailPayload,
+  ResendConfirmationPayload,
+  ForgotPasswordPayload,
+  ResetPasswordPayload,
+} from '@/types/auth/auth.models';
+
+// Backend action routes are PascalCase with no separators (e.g. ConfirmEmail),
+// matched case-insensitively — a dashed path like "confirm-email" will NOT match.
+function rethrowApiError(err: unknown): never {
+  if (axios.isAxiosError(err) && err.response?.data) {
+    throw err.response.data;
+  }
+  throw err;
+}
 
 export async function login(credentials: LoginCredentials) {
   try {
     const response = await api.post('/auth/login', credentials);
     return response.data;
-  } catch (err: any) {
-    // For failed requests that return error responses (400, 401, etc.)
-    if (err.response?.data) {
-      throw err.response.data; // ✅ Throw the actual response data
-    }
-    // For network errors or other issues
-    throw err;
+  } catch (err) {
+    rethrowApiError(err);
   }
 }
 
@@ -21,37 +32,44 @@ export async function register(data: RegisterData) {
   try {
     const response = await api.post('/auth/register', data);
     return response.data;
-  } catch (err: any) {
-    if (err.response?.data) {
-      throw err.response.data;
-    }
-    throw err;
+  } catch (err) {
+    rethrowApiError(err);
   }
 }
 
-export async function requestPasswordReset(email: string) {
+export async function confirmEmail(payload: ConfirmEmailPayload) {
   try {
-    // TODO: confirm backend endpoint path for initiating a password reset
-    const response = await api.post('/auth/forgot-password', { email });
+    const response = await api.post('/auth/confirmemail', payload);
     return response.data;
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.data) {
-      throw err.response.data;
-    }
-    throw err;
+    rethrowApiError(err);
   }
 }
 
-export async function resetPassword(payload: { token: string; password: string }) {
+export async function resendConfirmationEmail(payload: ResendConfirmationPayload) {
   try {
-    // TODO: confirm backend endpoint path for completing a password reset
-    const response = await api.post('/auth/reset-password', payload);
+    const response = await api.post('/auth/resendconfirmationemail', payload);
     return response.data;
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.data) {
-      throw err.response.data;
-    }
-    throw err;
+    rethrowApiError(err);
+  }
+}
+
+export async function forgotPassword(payload: ForgotPasswordPayload) {
+  try {
+    const response = await api.post('/auth/forgotpassword', payload);
+    return response.data;
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
+
+export async function resetPassword(payload: ResetPasswordPayload) {
+  try {
+    const response = await api.post('/auth/resetpassword', payload);
+    return response.data;
+  } catch (err) {
+    rethrowApiError(err);
   }
 }
 

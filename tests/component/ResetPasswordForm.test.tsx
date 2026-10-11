@@ -70,7 +70,7 @@ describe("ResetPasswordForm — new password step", () => {
   beforeEach(() => {
     pushMock.mockReset();
     resetPasswordMock.mockReset();
-    resetParams.value = new URLSearchParams("token=reset-token-123");
+    resetParams.value = new URLSearchParams("userId=user-id-123&token=reset-token-123");
   });
 
   it("rejects mismatched passwords without calling the API", async () => {
@@ -95,7 +95,15 @@ describe("ResetPasswordForm — new password step", () => {
     expect(resetPasswordMock).not.toHaveBeenCalled();
   });
 
-  it("saves the new password with the reset token and returns to sign in", async () => {
+  it("shows the invalid-link screen when the userId is missing", async () => {
+    resetParams.value = new URLSearchParams("token=reset-token-123");
+    renderWithProviders(<ResetPasswordForm />);
+
+    expect(screen.getByRole("heading", { name: "This link is invalid" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save new password" })).not.toBeInTheDocument();
+  });
+
+  it("saves the new password with the userId and reset token and returns to sign in", async () => {
     resetPasswordMock.mockResolvedValue({ isSuccess: true, statusCode: 200, error: null, data: null });
     renderWithProviders(<ResetPasswordForm />);
 
@@ -104,6 +112,11 @@ describe("ResetPasswordForm — new password step", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
 
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/auth/signin"));
-    expect(resetPasswordMock).toHaveBeenCalledWith({ token: "reset-token-123", password: "Strong123" });
+    expect(resetPasswordMock).toHaveBeenCalledWith({
+      userId: "user-id-123",
+      token: "reset-token-123",
+      newPassword: "Strong123",
+      confirmNewPassword: "Strong123",
+    });
   });
 });
