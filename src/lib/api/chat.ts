@@ -3,8 +3,10 @@ import { getSavedToken } from '@/utils/authToken';
 import api from './client';
 import { toPercent } from './file';
 import { UserChat, ApiChatResponse, ChatCreateDto, ChatSummary, UpdateChatDetailsDto, ApiEnvelope } from '@/types/chat/chat.models';
+import { OffsetPageRequest } from '@/types/pagination';
 
-export async function getUserChats(): Promise<UserChat[]> {
+// Without a page, every chat is returned (most recently active first).
+export async function getUserChats(page?: OffsetPageRequest): Promise<UserChat[]> {
   const token = getSavedToken();
   if (!token) throw new Error('No auth token found');
 
@@ -12,6 +14,7 @@ export async function getUserChats(): Promise<UserChat[]> {
     const response = await api.get<ApiChatResponse>(
       '/chat/user-chats',
       {
+        params: page,
         headers: {
           Authorization: `Bearer ${token}`,
         },
