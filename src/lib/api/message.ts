@@ -1,6 +1,7 @@
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
 import { ChatMessage, SendMessageRequest } from '@/types/chat/chat.models';
+import { CursorPageRequest } from '@/types/pagination';
 
 export async function sendMessage(chatId: string, content: string, senderId?: string): Promise<ChatMessage> {
   const token = getSavedToken();
@@ -57,7 +58,9 @@ export async function sendMessage(chatId: string, content: string, senderId?: st
   }
 }
 
-export async function getMessages(chatId: string): Promise<ChatMessage[]> {
+// Oldest-first either way. Without a page, every message is returned; with one, the
+// newest `top` messages before `before` (or the latest ones when `before` is omitted).
+export async function getMessages(chatId: string, page?: CursorPageRequest): Promise<ChatMessage[]> {
   const token = getSavedToken();
   if (!token) throw new Error('No auth token found');
 
@@ -65,6 +68,7 @@ export async function getMessages(chatId: string): Promise<ChatMessage[]> {
     const response = await api.get(
       `/chat/${chatId}/message`,
       {
+        params: page,
         headers: {
           Authorization: `Bearer ${token}`,
         },

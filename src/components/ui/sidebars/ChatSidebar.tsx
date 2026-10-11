@@ -24,6 +24,7 @@ import NewChatModal from "@/components/common/NewChatModal";
 import NewGroupModal from "@/components/common/NewGroupModal";
 import InviteLinkModal from "@/components/common/InviteLinkModal";
 import UserAvatar from "@/components/common/UserAvatar";
+import VirtualList, { VirtualListItemMeta } from "@/components/common/VirtualList";
 
 interface ChatUserDisplay {
   id: string;
@@ -43,6 +44,8 @@ interface ChatUserDisplay {
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 
+const CHAT_PAGE_SIZE = 20;
+
 const ChatSidebar = () => {
   const { isExpanded, isMobileOpen, isHovered } = useSidebar();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -50,6 +53,11 @@ const ChatSidebar = () => {
   const [activeTab, setActiveTab] = useState("messages");
   const [chats, setChats] = useState<ChatUserDisplay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
+  const [loadingMoreChats, setLoadingMoreChats] = useState(false);
+  // Bumped on every full (re)load so a page request still in flight from before it is
+  // dropped instead of appending to the fresh list.
+  const loadGenerationRef = useRef(0);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const { activeChat, setActiveUserId, setActiveChat, chatListVersion } = useChat();
   const currentUser = useAppSelector((state) => state.auth.user);
@@ -139,26 +147,33 @@ const ChatSidebar = () => {
     };
   };
 
-  // Fetch user chats from API
+  // Fetch the first page of user chats — the rest load as the list is scrolled.
   useEffect(() => {
+    const generation = ++loadGenerationRef.current;
+
     const fetchChats = async () => {
       try {
         setLoading(true);
-        const userChats = await getUserChats();
+        setLoadingMoreChats(false);
+        const userChats = await getUserChats({ top: CHAT_PAGE_SIZE, skip: 0 });
+        if (generation !== loadGenerationRef.current) return;
 
         // Ensure userChats is an array
         if (!Array.isArray(userChats)) {
           console.error("API did not return an array:", userChats);
           setChats([]);
+          setHasMoreChats(false);
           return;
         }
 
         const transformed = userChats.map(transformChat);
         setChats(transformed);
+        setHasMoreChats(userChats.length === CHAT_PAGE_SIZE);
 
         // Landed here from an invite-link accept (or any other "open this chat" deep
         // link) — auto-select it once the list has loaded, then drop the param so a
-        // later refresh doesn't keep re-selecting it.
+        // later refresh doesn't keep re-selecting it. A just-joined chat is among the
+        // most recently active, so it's in the first page.
         const targetChatId = searchParams.get("chatId");
         if (targetChatId) {
           const target = transformed.find((c) => c.id === targetChatId);
@@ -171,8 +186,9 @@ const ChatSidebar = () => {
         console.error("Error fetching chats:", err);
         showToast.error(getErrorMessage(err));
         setChats([]); // Set empty array on error
+        setHasMoreChats(false);
       } finally {
-        setLoading(false);
+        if (generation === loadGenerationRef.current) setLoading(false);
       }
     };
 
@@ -182,6 +198,33 @@ const ChatSidebar = () => {
     // chat elsewhere in the tree).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatListVersion]);
+
+  // Next page, offset by how many chats are already loaded. Live updates keep that count
+  // in step with the server: a chat moved to the top was moved there on the server too,
+  // and a chat we were removed from is gone on both sides. Duplicates are dropped anyway
+  // in case the order shifted between requests.
+  const loadMoreChats = async () => {
+    if (loadingMoreChats || !hasMoreChats) return;
+
+    const generation = loadGenerationRef.current;
+    setLoadingMoreChats(true);
+
+    try {
+      const page = await getUserChats({ top: CHAT_PAGE_SIZE, skip: chats.length });
+      if (generation !== loadGenerationRef.current) return;
+
+      setChats((prev) => {
+        const loadedIds = new Set(prev.map((c) => c.id));
+        return [...prev, ...page.map(transformChat).filter((c) => !loadedIds.has(c.id))];
+      });
+      setHasMoreChats(page.length === CHAT_PAGE_SIZE);
+    } catch (err) {
+      console.error("Error fetching more chats:", err);
+      showToast.error(getErrorMessage(err));
+    } finally {
+      if (generation === loadGenerationRef.current) setLoadingMoreChats(false);
+    }
+  };
 
   // Live unread badges: the initial GET only reflects the moment the sidebar mounted.
   // Every send/read after that pushes a ChatStateUpdated for this user on the shared
@@ -295,17 +338,18 @@ const ChatSidebar = () => {
   const statusDotClass = (status: ChatUserDisplay["status"]) =>
     status === "online" ? "bg-success-500 dark:bg-success-400" : status === "away" ? "bg-warning-400" : "bg-gray-400 dark:bg-stone-500";
 
-  const renderUserItem = (user: ChatUserDisplay, index: number) => {
+  const renderUserItem = (user: ChatUserDisplay, index: number, { isFirstMount }: VirtualListItemMeta) => {
     const status = resolveStatus(user);
     const rowActivity = chatActivity[user.id];
     const lastTime = formatRelativeTime(user.lastTimeRaw);
 
     return (
-    <li key={user.id} className="mb-1.5">
+    <div className="px-4 pb-1.5">
       <button
         onClick={() => handleUserClick(user)}
-        style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}
-        className={`animate-[floatIn_.22s_cubic-bezier(.2,.8,.2,1)_both] relative flex w-full items-center rounded-2xl p-3 text-left transition-all duration-200 ${EASE} ${
+        // Only animate a row's first appearance, not every time it scrolls back into view.
+        style={isFirstMount ? { animationDelay: `${Math.min(index, 6) * 40}ms` } : undefined}
+        className={`${isFirstMount ? "animate-[floatIn_.22s_cubic-bezier(.2,.8,.2,1)_both]" : ""} relative flex w-full items-center rounded-2xl p-3 text-left transition-all duration-200 ${EASE} ${
           selectedUserId === user.id
             ? "bg-gradient-to-r from-[#1a7b9b]/[0.09] to-transparent border border-[#1a7b9b]/25 dark:from-[#2596bb]/[0.16] dark:border-[#2596bb]/30"
             : "border border-transparent hover:-translate-y-px hover:bg-gray-100/80 hover:shadow-[0_10px_20px_-18px_rgba(16,24,40,.6)] dark:hover:bg-white/[0.04]"
@@ -375,7 +419,7 @@ const ChatSidebar = () => {
           </span>
         )}
       </button>
-    </li>
+    </div>
     );
   };
 
@@ -433,16 +477,16 @@ const ChatSidebar = () => {
         )}
       </div>
 
-      <div className="chat-scrollbar fade-y flex h-[calc(100vh-280px)] flex-col gap-2 overflow-y-auto px-4 pb-16 pt-3">
+      <div className="flex h-[calc(100vh-280px)] flex-col gap-2 pt-3">
         {!showFull && (
-          <div className="mb-4 flex justify-center">
+          <div className="mb-4 flex justify-center px-4">
             <button className={`rounded-xl bg-gray-100 p-3 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:bg-[#1a7b9b] hover:text-white hover:shadow-[0_8px_16px_-8px_rgba(26,123,155,.6)] dark:bg-stone-800 dark:hover:bg-[#2596bb]`}>
               <Search size={20} className="text-gray-500 dark:text-stone-400" />
             </button>
           </div>
         )}
 
-        <div className="mb-1 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between px-4">
           <h2 className="text-xs font-medium uppercase text-gray-500 dark:text-stone-400">
             {showFull ? "Recent Chats" : ""}
           </h2>
@@ -496,17 +540,28 @@ const ChatSidebar = () => {
           )}
         </div>
 
-        <ul className="flex flex-col pb-4">
+        <div className="min-h-0 flex-1">
           {loading ? (
-            [0, 1, 2].map(renderSkeletonRow)
+            <ul className="flex flex-col px-4">{[0, 1, 2].map(renderSkeletonRow)}</ul>
           ) : filteredUsers.length === 0 ? (
-            <li className="py-8 text-center text-sm text-gray-500 dark:text-stone-400">
+            <p className="px-4 py-8 text-center text-sm text-gray-500 dark:text-stone-400">
               No chats found
-            </li>
+            </p>
           ) : (
-            filteredUsers.map((user, index) => renderUserItem(user, index))
+            // Search only filters the chats loaded so far.
+            <VirtualList
+              items={filteredUsers}
+              getKey={(user) => user.id}
+              renderItem={renderUserItem}
+              onLoadMore={loadMoreChats}
+              hasMore={hasMoreChats}
+              isLoadingMore={loadingMoreChats}
+              footer={<div className="h-20" />}
+              className="chat-scrollbar fade-y"
+              aria-label="Recent chats"
+            />
           )}
-        </ul>
+        </div>
       </div>
 
       <NewChatModal isOpen={newChatModal.isOpen} onClose={newChatModal.closeModal} />

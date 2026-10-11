@@ -47,6 +47,7 @@
     "react-dropzone": "^14.3.5",
     "react-hot-toast": "^2.6.0",
     "react-redux": "^9.2.0",
+    "react-virtuoso": "4.12.3",
     "swiper": "^11.2.0",
     "tailwind-merge": "^2.6.0"
   },

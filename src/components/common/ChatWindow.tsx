@@ -31,6 +31,8 @@ import { createPreview } from "@/utils/preview";
 import { useUploadLimits } from "@/hooks/useUploadLimits";
 import CameraCaptureModal, { isCameraSupported } from "./CameraCaptureModal";
 import UserAvatar from "@/components/common/UserAvatar";
+import VirtualList, { VirtualListHandle, VirtualListItemMeta } from "./VirtualList";
+import LoadingSpinner from "./LoadingSpinner";
 
 interface ChatWindowProps {
   chatId: string;
@@ -38,10 +40,56 @@ interface ChatWindowProps {
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 
-// Pinned day pill: its sticky offset (keep in sync with its `top-3` class), and a
-// height with some slack so sliding it up by offset + height takes it fully out of view.
+// Pinned day pill: its offset from the top of the list (keep in sync with its `top-3`
+// class), and a height with some slack so sliding it up by offset + height takes it
+// fully out of view.
 const DAY_PILL_TOP = 12;
 const DAY_PILL_HEIGHT = 32;
+
+// Messages per request: the latest page when a chat opens, then one more older page
+// each time the user scrolls to the top.
+const MESSAGE_PAGE_SIZE = 50;
+
+const DAY_PILL_CLASS =
+  "rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 shadow-[0_1px_2px_rgba(16,24,40,.08)] backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400";
+
+// Helper to ensure content is always a string
+const ensureStringContent = (content: any): string => {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (content === null || content === undefined) {
+    return '';
+  }
+  if (typeof content === 'object') {
+    // If it's an object, try to extract a meaningful string
+    if (content.text) return String(content.text);
+    if (content.message) return String(content.message);
+    // Otherwise, stringify it
+    return JSON.stringify(content);
+  }
+  return String(content);
+};
+
+// Flattens a REST-fetched message into the shape the list renders.
+const toChatMessage = (msg: any, chatId: string): ChatMessage => ({
+  id: String(msg.id || ''),
+  content: ensureStringContent(msg.content),
+  senderId: String(msg.senderId || msg.sender?.id || ''),
+  chatId: String(msg.chatId || msg.chat?.id || chatId),
+  timestamp: msg.sentAt || msg.createdAt || msg.timestamp || new Date().toISOString(),
+  sentAt: msg.sentAt,
+  createdAt: msg.createdAt,
+  isRead: msg.isRead,
+  status: normalizeMessageStatus(msg.status),
+  type: msg.type,
+  attachments: msg.attachments || [],
+  // Keep nested objects for future use
+  sender: msg.sender,
+  chat: msg.chat,
+});
+
+const messageTimestamp = (msg: ChatMessage) => msg.sentAt || msg.timestamp || msg.createdAt;
 
 export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [message, setMessage] = useState("");
@@ -51,12 +99,18 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [sending, setSending] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [unseenCount, setUnseenCount] = useState(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messageListRef = useRef<HTMLDivElement>(null);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const messageListRef = useRef<VirtualListHandle>(null);
+  const currentChatIdRef = useRef(chatId);
+  const isAtBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<string | undefined>(undefined);
   const lastScrollTopRef = useRef(0);
   const dayPillShiftRef = useRef(0);
-  const pinnedDaySectionRef = useRef<HTMLElement | null>(null);
-  const lastMessageCountRef = useRef(0);
+  const pinnedDayRef = useRef<string | undefined>(undefined);
+  const dayPillRef = useRef<HTMLDivElement>(null);
+  const dayPillLabelRef = useRef<HTMLSpanElement>(null);
   const lastActivitySentAtRef = useRef(0);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
@@ -98,67 +152,81 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     });
   };
 
-  // Helper to ensure content is always a string
-  const ensureStringContent = (content: any): string => {
-    if (typeof content === 'string') {
-      return content;
-    }
-    if (content === null || content === undefined) {
-      return '';
-    }
-    if (typeof content === 'object') {
-      // If it's an object, try to extract a meaningful string
-      if (content.text) return String(content.text);
-      if (content.message) return String(content.message);
-      // Otherwise, stringify it
-      return JSON.stringify(content);
-    }
-    return String(content);
-  };
-
-  // Fetch existing messages when chatId changes
   useEffect(() => {
+    currentChatIdRef.current = chatId;
+  }, [chatId]);
+
+  // Opening a chat loads only its latest page; older pages load as the user scrolls up
+  // (loadOlderMessages). Everything from the previous chat is reset first.
+  useEffect(() => {
+    if (!chatId) return;
+    let cancelled = false;
+
+    setMessages([]);
+    setMessagesLoading(true);
+    setHasOlderMessages(false);
+    setLoadingOlderMessages(false);
+    setUnseenCount(0);
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
+    lastMessageIdRef.current = undefined;
+    pinnedDayRef.current = undefined;
+    lastScrollTopRef.current = 0;
+
     const fetchMessages = async () => {
       try {
-        const fetchedMessages = await getMessages(chatId);
-        // Transform messages to match our format
-        const transformedMessages: ChatMessage[] = fetchedMessages.map((msg: any) => {
-          // Extract nested properties and flatten
-          const transformed: ChatMessage = {
-            id: String(msg.id || ''),
-            content: ensureStringContent(msg.content),
-            senderId: String(msg.senderId || msg.sender?.id || ''),
-            chatId: String(msg.chatId || msg.chat?.id || chatId),
-            timestamp: msg.sentAt || msg.createdAt || msg.timestamp || new Date().toISOString(),
-            sentAt: msg.sentAt,
-            createdAt: msg.createdAt,
-            isRead: msg.isRead,
-            status: normalizeMessageStatus(msg.status),
-            type: msg.type,
-            attachments: msg.attachments || [],
-            // Keep nested objects for future use
-            sender: msg.sender,
-            chat: msg.chat,
-          };
-          return transformed;
-        });
-        // Ensure oldest-to-newest order regardless of API ordering
-        transformedMessages.sort(
-          (a, b) =>
-            new Date(a.sentAt || a.createdAt || a.timestamp || 0).getTime() -
-            new Date(b.sentAt || b.createdAt || b.timestamp || 0).getTime()
-        );
-        setMessages(transformedMessages);
+        const page = await getMessages(chatId, { top: MESSAGE_PAGE_SIZE });
+        if (cancelled) return;
+
+        const fetched = page.map((msg) => toChatMessage(msg, chatId));
+        const fetchedIds = new Set(fetched.map((m) => m.id));
+        // Keep anything that arrived live over SignalR while the page was loading.
+        setMessages((prev) => [...fetched, ...prev.filter((m) => m.chatId === chatId && !fetchedIds.has(m.id))]);
+        setHasOlderMessages(page.length === MESSAGE_PAGE_SIZE);
       } catch (err) {
+        if (cancelled) return;
         console.error("Error fetching messages:", err);
         showToast.error(getErrorMessage(err));
+      } finally {
+        if (!cancelled) setMessagesLoading(false);
       }
     };
 
-    if (chatId) {
-      fetchMessages();
-    }
+    fetchMessages();
+
+    return () => {
+      cancelled = true;
+    };
   }, [chatId, setMessages]);
+
+  // Cursor paging: ask for the page right before the oldest message we hold.
+  const loadOlderMessages = async () => {
+    if (loadingOlderMessages || !hasOlderMessages) return;
+
+    const oldest = messages.find((m) => !m.id.startsWith("temp-"));
+    if (!oldest) return;
+
+    const requestChatId = chatId;
+    setLoadingOlderMessages(true);
+
+    try {
+      const page = await getMessages(requestChatId, { top: MESSAGE_PAGE_SIZE, before: oldest.id });
+      if (currentChatIdRef.current !== requestChatId) return;
+
+      const older = page.map((msg) => toChatMessage(msg, requestChatId));
+      setMessages((prev) => {
+        const loadedIds = new Set(prev.map((m) => m.id));
+        return [...older.filter((m) => !loadedIds.has(m.id)), ...prev];
+      });
+      setHasOlderMessages(page.length === MESSAGE_PAGE_SIZE);
+    } catch (err) {
+      if (currentChatIdRef.current !== requestChatId) return;
+      console.error("Error fetching older messages:", err);
+      showToast.error(getErrorMessage(err));
+    } finally {
+      if (currentChatIdRef.current === requestChatId) setLoadingOlderMessages(false);
+    }
+  };
 
   // Live: reflect another admin's participant/detail changes for this chat while it's
   // open, without needing a refetch. (Our own changes, made via GroupInfoModal, are
@@ -206,73 +274,110 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     };
   }, [connection, chatId, activeChat, currentUser?.id, setActiveChat]);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // New messages scroll into view when the user is already at the bottom, or when they
+  // sent it themselves. Otherwise the view stays put and the "new messages" pill counts
+  // them. (Only appends reach this — loading an older page above doesn't.)
+  const followNewMessages = (atBottom: boolean) =>
+    atBottom || messages[messages.length - 1]?.senderId === currentUser?.id ? "smooth" : false;
 
-  // Track unseen message count while the user has scrolled up from the bottom
-  useEffect(() => {
-    const prevCount = lastMessageCountRef.current;
-    if (messages.length > prevCount && !isAtBottom) {
-      setUnseenCount((c) => c + (messages.length - prevCount));
-    }
-    lastMessageCountRef.current = messages.length;
-  }, [messages, isAtBottom]);
-
-  // Reveal the typing bubble the same way new messages are revealed — only when
-  // already at the bottom, so it doesn't yank someone away from older history.
-  useEffect(() => {
-    if (isPeerTyping && isAtBottom) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [isPeerTyping, isAtBottom]);
-
-  // WhatsApp-style pinned day pill: scrolling down (towards newer messages) slides
-  // it up with the content until it's gone, scrolling up slides it back in. Done on
-  // the DOM directly — re-rendering the whole list on every scroll tick isn't worth it.
-  const updatePinnedDayPill = (el: HTMLDivElement) => {
-    const dy = el.scrollTop - lastScrollTopRef.current;
-    lastScrollTopRef.current = el.scrollTop;
-
-    // The pinned pill belongs to the day section currently crossing the pin line.
-    // Sticky `top` is measured from inside the list's padding, so include it.
-    const pinOffset = parseFloat(getComputedStyle(el).paddingTop) + DAY_PILL_TOP;
-    const pinLine = el.getBoundingClientRect().top + pinOffset;
-    let pinned: HTMLElement | null = null;
-    for (const section of el.querySelectorAll<HTMLElement>("[data-day-section]")) {
-      const rect = section.getBoundingClientRect();
-      if (rect.top < pinLine && rect.bottom > pinLine) {
-        pinned = section;
-        break;
-      }
-    }
-
-    // A new day took over the pin — it starts fully visible and only hides once
-    // the user keeps scrolling down past it.
-    if (pinned !== pinnedDaySectionRef.current) {
-      pinnedDaySectionRef.current?.querySelector<HTMLElement>("[data-day-pill]")?.style.removeProperty("transform");
-      pinnedDaySectionRef.current = pinned;
-      dayPillShiftRef.current = 0;
-    }
-
-    dayPillShiftRef.current = Math.min(Math.max(dayPillShiftRef.current + dy, 0), pinOffset + DAY_PILL_HEIGHT);
-    const pill = pinned?.querySelector<HTMLElement>("[data-day-pill]");
-    if (pill) pill.style.transform = `translateY(-${dayPillShiftRef.current}px)`;
-  };
-
-  const handleMessageListScroll = () => {
-    const el = messageListRef.current;
-    if (!el) return;
-    updatePinnedDayPill(el);
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const atBottom = distanceFromBottom < 120;
+  const handleAtBottomChange = (atBottom: boolean) => {
+    isAtBottomRef.current = atBottom;
     setIsAtBottom(atBottom);
     if (atBottom) setUnseenCount(0);
   };
 
+  // Count messages from others that arrive at the end while the user is scrolled up.
+  // Compared by the last message id, so prepending an older page doesn't count.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const prevLastId = lastMessageIdRef.current;
+    lastMessageIdRef.current = last?.id;
+
+    if (!last || !prevLastId || last.id === prevLastId || isAtBottomRef.current) return;
+    if (last.senderId === currentUser?.id) return;
+
+    const prevLastIndex = messages.findIndex((m) => m.id === prevLastId);
+    setUnseenCount((c) => c + (prevLastIndex === -1 ? 1 : messages.length - 1 - prevLastIndex));
+  }, [messages, currentUser?.id]);
+
+  // Reveal the typing bubble the same way new messages are revealed — only when
+  // already at the bottom, so it doesn't yank someone away from older history.
+  useEffect(() => {
+    if (!isPeerTyping || !isAtBottomRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      const scroller = messageListRef.current?.getScroller();
+      scroller?.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isPeerTyping]);
+
+  // WhatsApp-style pinned day pill. Rows are virtualized, so there are no day sections
+  // in the DOM to make sticky — instead one overlay pill shows the day being read, and
+  // each day's first message carries an inline divider. The overlay mimics a sticky
+  // header: hidden while that day's own divider is still visible, pushed up by the next
+  // day's divider, and slid away while scrolling down (back in when scrolling up). Done
+  // on the DOM directly — re-rendering the whole list on every scroll tick isn't worth it.
+  const updatePinnedDayPill = (el: HTMLElement, fromScroll = true) => {
+    const pill = dayPillRef.current;
+    const label = dayPillLabelRef.current;
+    if (!pill || !label) return;
+
+    const dy = el.scrollTop - lastScrollTopRef.current;
+    lastScrollTopRef.current = el.scrollTop;
+    const pinLine = el.getBoundingClientRect().top + DAY_PILL_TOP;
+
+    // The day being read is the topmost row still reaching below the pin line.
+    let current: HTMLElement | undefined;
+    for (const row of el.querySelectorAll<HTMLElement>("[data-message-day]")) {
+      if (row.getBoundingClientRect().bottom > pinLine) {
+        current = row;
+        break;
+      }
+    }
+
+    const day = current?.dataset.messageDay;
+
+    // A new day took over the pin — it starts fully visible and only hides once
+    // the user keeps scrolling down past it.
+    if (day !== pinnedDayRef.current) {
+      pinnedDayRef.current = day;
+      dayPillShiftRef.current = 0;
+      label.textContent = formatDayDivider(current?.dataset.timestamp);
+    }
+
+    // Big jumps aren't the user scrolling (a page loading above shifts scrollTop by its
+    // whole height) — only real scrolling slides the pill.
+    if (fromScroll && Math.abs(dy) < el.clientHeight) {
+      dayPillShiftRef.current = Math.min(Math.max(dayPillShiftRef.current + dy, 0), DAY_PILL_TOP + DAY_PILL_HEIGHT);
+    }
+
+    let push = 0;
+    for (const divider of el.querySelectorAll<HTMLElement>("[data-day-divider]")) {
+      const top = divider.getBoundingClientRect().top;
+      if (top > pinLine) {
+        push = Math.max(0, DAY_PILL_HEIGHT - (top - pinLine));
+        break;
+      }
+    }
+
+    const ownDivider = day ? el.querySelector<HTMLElement>(`[data-day-divider="${day}"]`) : null;
+    const ownDividerVisible = !!ownDivider && ownDivider.getBoundingClientRect().top >= pinLine;
+
+    pill.style.opacity = day && !ownDividerVisible ? "1" : "0";
+    pill.style.transform = `translateY(-${Math.max(dayPillShiftRef.current, push)}px)`;
+  };
+
+  // Rows change without a scroll too (first page, an older page, a new message).
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const scroller = messageListRef.current?.getScroller();
+      if (scroller) updatePinnedDayPill(scroller, false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages, messagesLoading]);
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messageListRef.current?.scrollToBottom("smooth");
     setUnseenCount(0);
   };
 
@@ -566,25 +671,6 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     return map;
   }, [participantsById]);
 
-  // Messages bucketed by calendar day. Each day renders as its own section so the
-  // day pill can be `sticky` within it — the pill pins while scrolling through that
-  // day and the next day's section pushes it out, WhatsApp-style. `index` stays the
-  // position in the flat list for sender grouping and the entry animation stagger.
-  const messageDays = useMemo(() => {
-    const days: { key: string; timestamp?: string; items: { msg: ChatMessage; index: number }[] }[] = [];
-    messages.forEach((msg, index) => {
-      const timestamp = msg.sentAt || msg.timestamp || msg.createdAt;
-      const key = dayKey(timestamp);
-      const last = days[days.length - 1];
-      if (last && last.key === key) {
-        last.items.push({ msg, index });
-      } else {
-        days.push({ key, timestamp, items: [{ msg, index }] });
-      }
-    });
-    return days;
-  }, [messages]);
-
   // A group has no single peer to report a status for — only surface something
   // when someone's actually typing, and name them since there's no single "the
   // other person" to imply it.
@@ -608,6 +694,87 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
       return isFirstInGroup ? "18px 18px 6px 18px" : "18px 6px 6px 18px";
     }
     return isFirstInGroup ? "18px 18px 18px 6px" : "6px 18px 18px 6px";
+  };
+
+  // One row per message. Day dividers and sender grouping compare with the previous
+  // message, since rows are rendered one at a time rather than per day section.
+  const renderMessage = (msg: ChatMessage, index: number, { isFirstMount }: VirtualListItemMeta) => {
+    const timestamp = messageTimestamp(msg);
+    const day = dayKey(timestamp);
+    const prev = index > 0 ? messages[index - 1] : undefined;
+    // A new day also restarts the sender grouping — same as WhatsApp, the
+    // name/avatar reappears after a day divider even mid-conversation.
+    const isFirstOfDay = !prev || dayKey(messageTimestamp(prev)) !== day;
+
+    const divider = isFirstOfDay && (
+      <div data-day-divider={day} className={`mb-4 flex justify-center ${index === 0 ? "" : "mt-2"}`}>
+        <span className={DAY_PILL_CLASS}>{formatDayDivider(timestamp)}</span>
+      </div>
+    );
+
+    if (msg.type === BackendMessageType.Alert) {
+      return (
+        <div data-message-day={day} data-timestamp={timestamp} className="px-4">
+          {divider}
+          <div className="my-3 flex justify-center">
+            <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
+              {ensureStringContent(msg.content)}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    const isOwn = msg.senderId === currentUser?.id;
+    const isFirstInGroup = isFirstOfDay || prev!.senderId !== msg.senderId;
+    const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
+
+    return (
+      <div data-message-day={day} data-timestamp={timestamp} className="px-4">
+        {divider}
+        <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}>
+          <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+            {!isOwn && (
+              <span className="mb-1">
+                <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
+              </span>
+            )}
+
+            <div className="group relative">
+              <div
+                style={{ borderRadius: bubbleRadius(isOwn, isFirstInGroup) }}
+                // Only animate a bubble's first appearance, not every time it scrolls back into view.
+                className={`${isFirstMount ? "animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both]" : ""} px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
+                  isOwn
+                    ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
+                    : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
+                }`}
+              >
+                {isGroupChat && !isOwn && isFirstInGroup && (
+                  <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
+                    {getSenderName(msg)}
+                  </p>
+                )}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className={ensureStringContent(msg.content) ? "mb-1.5" : ""}>
+                    <MessageAttachments attachments={msg.attachments} isOwn={isOwn} />
+                  </div>
+                )}
+                {ensureStringContent(msg.content) && (
+                  <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
+                )}
+                <div className="mt-1 flex items-center justify-end gap-1">
+                  <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
+                    {formatTime(timestamp)}
+                  </span>
+                  {isOwn && <MessageStatus status={msg.status} />}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const dropdownItemClass =
@@ -710,118 +877,68 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           className="pointer-events-none absolute inset-x-0 top-0 h-64"
           style={{ background: "radial-gradient(1200px 400px at 50% -10%, rgba(26,123,155,.05), transparent 70%)" }}
         />
+        {/* Pinned copy of the day pill — see updatePinnedDayPill. */}
         <div
-          ref={messageListRef}
-          onScroll={handleMessageListScroll}
-          className="chat-scrollbar fade-y relative h-full overflow-y-auto p-4 dark:bg-[#1c1917]"
+          ref={dayPillRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center opacity-0 transition-opacity duration-150"
         >
-          {messages.length === 0 ? (
+          <span ref={dayPillLabelRef} className={DAY_PILL_CLASS} />
+        </div>
+
+        {messagesLoading ? (
+          <div className="flex h-full items-center justify-center dark:bg-[#1c1917]">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="h-full p-4 dark:bg-[#1c1917]">
             <div className="py-8 text-center text-sm text-gray-500 dark:text-stone-400">
               No messages yet. Start the conversation!
             </div>
-          ) : (
-            <>
-              {messageDays.map((day, dayIndex) => (
-                <section key={day.key || dayIndex} data-day-section className={dayIndex === 0 ? "" : "mt-2"}>
-                  <div data-day-pill className="pointer-events-none sticky top-3 z-10 mb-4 flex justify-center">
-                    <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 shadow-[0_1px_2px_rgba(16,24,40,.08)] backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
-                      {formatDayDivider(day.timestamp)}
-                    </span>
-                  </div>
-
-                  {day.items.map(({ msg, index }, itemIndex) => {
-                    // A new day also restarts the sender grouping — same as WhatsApp, the
-                    // name/avatar reappears after a day divider even mid-conversation.
-                    const isFirstOfDay = itemIndex === 0;
-
-                    if (msg.type === BackendMessageType.Alert) {
-                      return (
-                        <div key={msg.id} className="my-3 flex justify-center">
-                          <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
-                            {ensureStringContent(msg.content)}
-                          </span>
-                        </div>
-                      );
-                    }
-
-                    const isOwn = msg.senderId === currentUser?.id;
-                    const isFirstInGroup = isFirstOfDay || messages[index - 1].senderId !== msg.senderId;
-                    const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
-
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
-                      >
-                        <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                          {!isOwn && (
-                            <span className="mb-1">
-                              <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
-                            </span>
-                          )}
-
-                          <div className="group relative">
-                            <div
-                              style={{
-                                borderRadius: bubbleRadius(isOwn, isFirstInGroup),
-                                animationDelay: `${Math.min(index, 8) * 40}ms`,
-                              }}
-                              className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
-                                isOwn
-                                  ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
-                                  : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
-                              }`}
-                            >
-                              {isGroupChat && !isOwn && isFirstInGroup && (
-                                <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
-                                  {getSenderName(msg)}
-                                </p>
-                              )}
-                              {msg.attachments && msg.attachments.length > 0 && (
-                                <div className={ensureStringContent(msg.content) ? "mb-1.5" : ""}>
-                                  <MessageAttachments attachments={msg.attachments} isOwn={isOwn} />
-                                </div>
-                              )}
-                              {ensureStringContent(msg.content) && (
-                                <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
-                              )}
-                              <div className="mt-1 flex items-center justify-end gap-1">
-                                <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
-                                  {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
-                                </span>
-                                {isOwn && <MessageStatus status={msg.status} />}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+          </div>
+        ) : (
+          <VirtualList
+            key={chatId}
+            ref={messageListRef}
+            items={messages}
+            getKey={(msg) => msg.id}
+            renderItem={renderMessage}
+            startAtBottom
+            preservePositionOnPrepend
+            onLoadPrevious={loadOlderMessages}
+            hasPrevious={hasOlderMessages}
+            isLoadingPrevious={loadingOlderMessages}
+            followOutput={followNewMessages}
+            atBottomThreshold={120}
+            onAtBottomChange={handleAtBottomChange}
+            onScroll={updatePinnedDayPill}
+            header={<div className="h-4" />}
+            footer={
+              <div className="flow-root px-4 pb-4">
+                {isPeerTyping && (
+                  <div className="mt-1 flex justify-start">
+                    <div className="flex items-end gap-2">
+                      <span className="mb-1">
+                        <UserAvatar
+                          src={getSenderAvatar(peerActivity!.userId)}
+                          name={isGroupChat ? participantNames.get(peerActivity!.userId) : chatDisplayName}
+                          size={32}
+                        />
+                      </span>
+                      <div className="flex items-center gap-1 rounded-[18px_18px_18px_6px] border border-gray-200/70 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524]">
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0s" }} />
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.16s" }} />
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.32s" }} />
                       </div>
-                    );
-                  })}
-                </section>
-              ))}
-
-              {isPeerTyping && (
-                <div className="mt-1 flex justify-start">
-                  <div className="flex items-end gap-2">
-                    <span className="mb-1">
-                      <UserAvatar
-                        src={getSenderAvatar(peerActivity!.userId)}
-                        name={isGroupChat ? participantNames.get(peerActivity!.userId) : chatDisplayName}
-                        size={32}
-                      />
-                    </span>
-                    <div className="flex items-center gap-1 rounded-[18px_18px_18px_6px] border border-gray-200/70 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524]">
-                      <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0s" }} />
-                      <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.16s" }} />
-                      <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.32s" }} />
                     </div>
                   </div>
-                </div>
-              )}
-            </>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+                )}
+              </div>
+            }
+            className="chat-scrollbar fade-y dark:bg-[#1c1917]"
+            aria-label="Messages"
+          />
+        )}
 
         {!isAtBottom && unseenCount > 0 && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
