@@ -32,7 +32,7 @@ export default function ProfilePage() {
     const token = useAppSelector((state) => state.auth.token);
     const status = useAppSelector((state) => state.auth.status);
     const initialized = useAppSelector((state) => state.auth.initialized);
-    const { theme } = useTheme();
+    const { resolvedTheme } = useTheme();
 
     const [displayNameDraft, setDisplayNameDraft] = useState(user?.displayName || "");
     const [bioDraft, setBioDraft] = useState(user?.bio || "");
@@ -258,7 +258,7 @@ export default function ProfilePage() {
                                                     <div className="absolute right-0 top-full z-40 mt-2">
                                                         <EmojiPicker
                                                             onEmojiClick={handleEmojiClick}
-                                                            theme={theme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
+                                                            theme={resolvedTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
                                                             lazyLoadEmojis
                                                         />
                                                     </div>

@@ -15,7 +15,7 @@ export type CachedMediaStatus = "checking" | "idle" | "downloading" | "ready" | 
  * A chat media file that only loads when the user asks for it: shows from the local
  * IndexedDB cache if it was downloaded (or sent) before, otherwise waits for download().
  */
-export function useCachedMedia(fileId: string, sizeBytes?: number) {
+export function useCachedMedia(fileId: string, sizeBytes?: number, options?: { autoDownload?: boolean }) {
   const userId = useAppSelector((state) => state.auth.user?.id);
   const [status, setStatus] = useState<CachedMediaStatus>("checking");
   const [progress, setProgress] = useState(0);
@@ -85,6 +85,13 @@ export function useCachedMedia(fileId: string, sizeBytes?: number) {
   }, [userId, fileId, sizeBytes, showBlob]);
 
   const cancel = useCallback(() => abortRef.current?.abort(), []);
+
+  // Opt-in: once we know the file isn't cached, fetch it right away instead of waiting
+  // for a tap. Off by default (status stays "idle" forever until download() is called).
+  const autoDownload = options?.autoDownload;
+  useEffect(() => {
+    if (status === "idle" && autoDownload) download();
+  }, [status, autoDownload, download]);
 
   return { status, progress, objectUrl, download, cancel };
 }

@@ -17,6 +17,7 @@ import { useAppSelector } from "@/store/hooks";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useTheme } from "@/context/ThemeContext";
+import { usePreferences } from "@/context/PreferencesContext";
 import { normalizeMessageStatus } from "@/utils/messageStatus";
 import { useChat } from "@/context/ChatContext";
 import { useModal } from "@/hooks/useModal";
@@ -124,7 +125,8 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [showCamera, setShowCamera] = useState(false);
   const uploadLimits = useUploadLimits();
   const currentUser = useAppSelector((state) => state.auth.user);
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const { preferences } = usePreferences();
   const { activeChat, setActiveChat } = useChat();
   const groupInfoModal = useModal();
   const contactInfoModal = useModal();
@@ -598,10 +600,11 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
+    if (e.key !== "Enter") return;
+    const shouldSend = preferences.sendOnEnter ? !e.shiftKey : e.ctrlKey || e.metaKey;
+    if (!shouldSend) return;
+    e.preventDefault();
+    handleSendMessage();
   };
 
   const formatTime = (timestamp?: string): string => {
@@ -731,11 +734,12 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     const isOwn = msg.senderId === currentUser?.id;
     const isFirstInGroup = isFirstOfDay || prev!.senderId !== msg.senderId;
     const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
+    const isCompact = preferences.messageDensity === "compact";
 
     return (
       <div data-message-day={day} data-timestamp={timestamp} className="px-4">
         {divider}
-        <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}>
+        <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? (isCompact ? "mt-2" : "mt-3") : (isCompact ? "mt-0.5" : "mt-1")}`}>
           <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
             {!isOwn && (
               <span className="mb-1">
@@ -746,7 +750,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                   presence={presence[msg.senderId]}
                   placement="right"
                 >
-                  <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
+                  <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={isCompact ? 26 : 32} />
                 </UserHoverCard>
               </span>
             )}
@@ -755,7 +759,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               <div
                 style={{ borderRadius: bubbleRadius(isOwn, isFirstInGroup) }}
                 // Only animate a bubble's first appearance, not every time it scrolls back into view.
-                className={`${isFirstMount ? "animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both]" : ""} px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
+                className={`${isFirstMount ? "animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both]" : ""} ${isCompact ? "px-2.5 py-1.5" : "px-3 py-2"} transition-transform duration-200 ${EASE} hover:-translate-y-px ${
                   isOwn
                     ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
                     : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
@@ -1029,7 +1033,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               <div className="absolute bottom-full left-0 z-40 mb-2">
                 <EmojiPicker
                   onEmojiClick={handleEmojiClick}
-                  theme={theme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
+                  theme={resolvedTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
                   lazyLoadEmojis
                 />
               </div>
@@ -1058,7 +1062,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           />
 
           <span className="mr-1 hidden shrink-0 items-center rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-400 sm:inline-flex dark:bg-white/5 dark:text-stone-500">
-            Enter ↵
+            {preferences.sendOnEnter ? "Enter ↵" : "Ctrl+Enter ↵"}
           </span>
 
           <button
