@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { acceptAttribute, validateFile } from "@/utils/file";
+import { convertToWebP, ImageConversionError } from "@/utils/image";
 import { useUploadLimits } from "@/hooks/useUploadLimits";
 import { FileKind } from "@/types/file.models";
 import { showToast } from "@/utils/toast";
@@ -48,7 +49,11 @@ export default function AvatarUpload({ imageUrl, fallbackText, onUpload, size = 
     setProgress(0);
 
     try {
-      await onUpload(file, setProgress);
+      const optimized = await convertToWebP(file);
+      await onUpload(optimized, setProgress);
+    } catch (err) {
+      if (err instanceof ImageConversionError) showToast.error(err.message);
+      else throw err;
     } finally {
       setProgress(null);
       setPreviewUrl(null);

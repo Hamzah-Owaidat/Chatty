@@ -21,6 +21,8 @@ import { normalizeMessageStatus } from "@/utils/messageStatus";
 import { useChat } from "@/context/ChatContext";
 import { useModal } from "@/hooks/useModal";
 import GroupInfoModal from "./GroupInfoModal";
+import ProfileViewModal from "./ProfileViewModal";
+import UserHoverCard from "./UserHoverCard";
 import MessageAttachments from "./MessageAttachments";
 import PendingAttachments, { PendingFile } from "./PendingAttachments";
 import { uploadChatFiles, deleteFile } from "@/lib/api/file";
@@ -125,6 +127,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const { theme } = useTheme();
   const { activeChat, setActiveChat } = useChat();
   const groupInfoModal = useModal();
+  const contactInfoModal = useModal();
 
   // Use SignalR hook for real-time messaging
   const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage, connection } = useSignalR(chatId, currentUser?.id);
@@ -736,7 +739,15 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
             {!isOwn && (
               <span className="mb-1">
-                <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
+                <UserHoverCard
+                  userId={msg.senderId}
+                  fallbackName={getSenderName(msg)}
+                  fallbackImage={senderAvatar}
+                  presence={presence[msg.senderId]}
+                  placement="right"
+                >
+                  <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
+                </UserHoverCard>
               </span>
             )}
 
@@ -786,20 +797,28 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
       <div className="relative z-20 flex items-center justify-between border-b border-gray-200/70 bg-white/75 px-4 py-3 backdrop-blur-xl backdrop-saturate-150 dark:border-stone-800/70 dark:bg-[#201d1b]/75">
         {/* Left side (user info) */}
         <div className="flex items-center">
-          <div className="relative mr-3">
-            <UserAvatar
-              src={activeChat?.avatar}
-              name={chatDisplayName}
-              size={44}
-              className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]"
-            />
-            {!isGroupChat && isPeerOnline && (
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
-                <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
-                <span className="relative h-3.5 w-3.5 rounded-full border-2 border-white bg-success-500 dark:border-[#201d1b] dark:bg-success-400" />
-              </span>
-            )}
-          </div>
+          <UserHoverCard
+            userId={otherParticipantId || ""}
+            fallbackName={chatDisplayName}
+            fallbackImage={activeChat?.avatar}
+            presence={peerPresence}
+            disabled={isGroupChat || !otherParticipantId}
+          >
+            <div className="relative mr-3">
+              <UserAvatar
+                src={activeChat?.avatar}
+                name={chatDisplayName}
+                size={44}
+                className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]"
+              />
+              {!isGroupChat && isPeerOnline && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                  <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
+                  <span className="relative h-3.5 w-3.5 rounded-full border-2 border-white bg-success-500 dark:border-[#201d1b] dark:bg-success-400" />
+                </span>
+              )}
+            </div>
+          </UserHoverCard>
           <div>
             <span className="block font-semibold text-gray-800 dark:text-gray-100">
               {chatDisplayName}
@@ -844,6 +863,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                 onItemClick={() => {
                   setIsDropdownOpen(false);
                   if (isGroupChat) groupInfoModal.openModal();
+                  else contactInfoModal.openModal();
                 }}
                 baseClassName={dropdownItemClass}
               >
@@ -1063,6 +1083,15 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
       {isGroupChat && (
         <GroupInfoModal isOpen={groupInfoModal.isOpen} onClose={groupInfoModal.closeModal} chatId={chatId} />
+      )}
+
+      {!isGroupChat && otherParticipantId && (
+        <ProfileViewModal
+          isOpen={contactInfoModal.isOpen}
+          onClose={contactInfoModal.closeModal}
+          userId={otherParticipantId}
+          presence={peerPresence}
+        />
       )}
     </div>
   );
