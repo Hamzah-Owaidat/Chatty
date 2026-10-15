@@ -20,7 +20,7 @@ const BACKDROP = "fixed inset-0 h-full w-full bg-stone-950/30";
 const PANEL =
   "relative flex max-h-[80dvh] w-[calc(100%-1.5rem)] max-w-md flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_24px_48px_-16px_rgba(16,24,40,.35)] ring-1 ring-black/5 animate-[floatIn_.2s_cubic-bezier(.2,.8,.2,1)_both] dark:bg-stone-900 dark:ring-white/10";
 const FIELD =
-  "w-full rounded-xl bg-gray-100 px-3.5 py-2.5 text-sm text-gray-900 outline-none ring-1 ring-transparent transition placeholder:text-gray-400 focus:bg-white focus:ring-[#1a7b9b]/50 dark:bg-stone-800 dark:text-white dark:placeholder:text-stone-500 dark:focus:ring-[#2596bb]/60";
+  "w-full rounded-xl bg-gray-100 px-3.5 py-2.5 text-sm text-gray-900 outline-none ring-1 ring-transparent transition placeholder:text-gray-400 focus:bg-white focus:ring-accent-600/50 dark:bg-stone-800 dark:text-white dark:placeholder:text-stone-500 dark:focus:ring-accent-400/60";
 
 export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
   const [groupName, setGroupName] = useState("");
@@ -158,7 +158,7 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
             {selected.map((user) => (
               <span
                 key={user.id}
-                className="flex items-center gap-1.5 rounded-full bg-[#1a7b9b]/10 py-1 pl-1 pr-1.5 text-xs font-medium text-[#1a7b9b] dark:bg-[#2596bb]/15 dark:text-[#60c7e3]"
+                className="flex items-center gap-1.5 rounded-full bg-accent-600/10 py-1 pl-1 pr-1.5 text-xs font-medium text-accent-600 dark:bg-accent-400/15 dark:text-accent-300"
               >
                 <UserAvatar 
                   src={user.image} 
@@ -169,7 +169,7 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
                 <button
                   onClick={() => toggleSelected(user)}
                   aria-label={`Remove ${user.displayName}`}
-                  className="rounded-full p-0.5 transition hover:bg-[#1a7b9b]/15 dark:hover:bg-white/10"
+                  className="rounded-full p-0.5 transition hover:bg-accent-600/15 dark:hover:bg-white/10"
                 >
                   <X size={11} />
                 </button>
@@ -213,7 +213,7 @@ export default function NewGroupModal({ isOpen, onClose }: NewGroupModalProps) {
         <button
           onClick={handleCreate}
           disabled={creating}
-          className="mt-1 w-full rounded-xl bg-[#1a7b9b] py-2.5 text-sm font-medium text-white transition hover:bg-[#166b87] disabled:pointer-events-none disabled:opacity-50 dark:bg-[#2596bb] dark:hover:bg-[#2085a6]"
+          className="mt-1 w-full rounded-xl bg-accent-600 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 dark:bg-accent-400 dark:hover:bg-accent-hover-dark"
         >
           {creating ? "Creating…" : "Create group"}
         </button>

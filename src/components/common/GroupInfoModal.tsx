@@ -182,7 +182,7 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
   return (
     <Modal isOpen={isOpen} onClose={onClose} className="max-h-[85vh] max-w-md overflow-y-auto p-6">
       <h4 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
-        <Users size={18} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+        <Users size={18} className="text-accent-600 dark:text-accent-300" />
         Group info
       </h4>
 
@@ -203,12 +203,12 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
             placeholder="Group name"
-            className={`w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
+            className={`w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-accent-600/55 focus:ring-4 focus:ring-accent-600/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
           />
           <button
             onClick={handleSaveDetails}
             disabled={savingDetails}
-            className={`flex w-full items-center justify-center rounded-xl bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] py-2.5 text-sm font-medium text-white transition-all duration-200 ${EASE} hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50`}
+            className={`flex w-full items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 py-2.5 text-sm font-medium text-white transition-all duration-200 ${EASE} hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50`}
           >
             {savingDetails ? "Saving..." : "Save details"}
           </button>
@@ -264,7 +264,7 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search people to invite..."
-              className={`w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
+              className={`w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-accent-600/55 focus:ring-4 focus:ring-accent-600/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`}
             />
             <Search size={16} className="absolute left-3 top-3 text-gray-400 dark:text-stone-500" />
           </div>
@@ -288,7 +288,7 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
                         <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
                           {user.displayName}
                         </span>
-                        <UserPlus size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+                        <UserPlus size={16} className="text-accent-600 dark:text-accent-300" />
                       </button>
                     </li>
                   ))}

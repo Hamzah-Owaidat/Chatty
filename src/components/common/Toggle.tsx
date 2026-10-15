@@ -22,7 +22,7 @@ export default function Toggle({ checked, onChange, disabled = false, label }: T
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${EASE} ${
-        checked ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d]" : "bg-gray-200 dark:bg-stone-700"
+        checked ? "bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700" : "bg-gray-200 dark:bg-stone-700"
       } disabled:pointer-events-none disabled:opacity-50`}
     >
       <span

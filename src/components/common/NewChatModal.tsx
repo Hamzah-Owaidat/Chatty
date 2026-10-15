@@ -18,7 +18,7 @@ const BACKDROP = "fixed inset-0 h-full w-full bg-stone-950/30";
 const PANEL =
   "relative flex max-h-[80dvh] w-[calc(100%-1.5rem)] max-w-md flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_24px_48px_-16px_rgba(16,24,40,.35)] ring-1 ring-black/5 animate-[floatIn_.2s_cubic-bezier(.2,.8,.2,1)_both] dark:bg-stone-900 dark:ring-white/10";
 const FIELD =
-  "w-full rounded-xl bg-gray-100 py-2.5 pl-10 pr-3.5 text-sm text-gray-900 outline-none ring-1 ring-transparent transition placeholder:text-gray-400 focus:bg-white focus:ring-[#1a7b9b]/50 dark:bg-stone-800 dark:text-white dark:placeholder:text-stone-500 dark:focus:ring-[#2596bb]/60";
+  "w-full rounded-xl bg-gray-100 py-2.5 pl-10 pr-3.5 text-sm text-gray-900 outline-none ring-1 ring-transparent transition placeholder:text-gray-400 focus:bg-white focus:ring-accent-600/50 dark:bg-stone-800 dark:text-white dark:placeholder:text-stone-500 dark:focus:ring-accent-400/60";
 
 export default function NewChatModal({ isOpen, onClose }: NewChatModalProps) {
   const [query, setQuery] = useState("");
@@ -124,7 +124,7 @@ export default function NewChatModal({ isOpen, onClose }: NewChatModalProps) {
                     </span>
                     <Send
                       size={15}
-                      className="shrink-0 text-gray-400 transition group-hover:text-[#1a7b9b] dark:text-stone-500 dark:group-hover:text-[#60c7e3]"
+                      className="shrink-0 text-gray-400 transition group-hover:text-accent-600 dark:text-stone-500 dark:group-hover:text-accent-300"
                     />
                   </button>
                 </li>

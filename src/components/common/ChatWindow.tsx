@@ -18,6 +18,7 @@ import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useTheme } from "@/context/ThemeContext";
 import { usePreferences } from "@/context/PreferencesContext";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { normalizeMessageStatus } from "@/utils/messageStatus";
 import { useChat } from "@/context/ChatContext";
 import { useModal } from "@/hooks/useModal";
@@ -127,6 +128,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const currentUser = useAppSelector((state) => state.auth.user);
   const { resolvedTheme } = useTheme();
   const { preferences } = usePreferences();
+  const reducedMotion = useReducedMotion();
   const { activeChat, setActiveChat } = useChat();
   const groupInfoModal = useModal();
   const contactInfoModal = useModal();
@@ -283,7 +285,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   // sent it themselves. Otherwise the view stays put and the "new messages" pill counts
   // them. (Only appends reach this — loading an older page above doesn't.)
   const followNewMessages = (atBottom: boolean) =>
-    atBottom || messages[messages.length - 1]?.senderId === currentUser?.id ? "smooth" : false;
+    atBottom || messages[messages.length - 1]?.senderId === currentUser?.id ? (reducedMotion ? "auto" : "smooth") : false;
 
   const handleAtBottomChange = (atBottom: boolean) => {
     isAtBottomRef.current = atBottom;
@@ -311,10 +313,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
     if (!isPeerTyping || !isAtBottomRef.current) return;
     const frame = requestAnimationFrame(() => {
       const scroller = messageListRef.current?.getScroller();
-      scroller?.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+      scroller?.scrollTo({ top: scroller.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
     });
     return () => cancelAnimationFrame(frame);
-  }, [isPeerTyping]);
+  }, [isPeerTyping, reducedMotion]);
 
   // WhatsApp-style pinned day pill. Rows are virtualized, so there are no day sections
   // in the DOM to make sticky — instead one overlay pill shows the day being read, and
@@ -382,7 +384,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   }, [messages, messagesLoading]);
 
   const scrollToBottom = () => {
-    messageListRef.current?.scrollToBottom("smooth");
+    messageListRef.current?.scrollToBottom(reducedMotion ? "auto" : "smooth");
     setUnseenCount(0);
   };
 
@@ -634,7 +636,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
   const attachmentOptions = [
     { icon: Camera, label: "Camera", color: "text-success-500", onSelect: openCamera },
-    { icon: Image, label: "Photo & Video", color: "text-[#1a7b9b] dark:text-[#60c7e3]", onSelect: () => mediaInputRef.current?.click() },
+    { icon: Image, label: "Photo & Video", color: "text-accent-600 dark:text-accent-300", onSelect: () => mediaInputRef.current?.click() },
     { icon: FileText, label: "Document", color: "text-theme-purple-500", onSelect: () => documentInputRef.current?.click() },
   ];
 
@@ -695,7 +697,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const getSenderAvatar = (senderId: string, sender?: { image?: string } | null): string | undefined =>
     isGroupChat ? sender?.image || participantsById.get(senderId)?.image : activeChat?.avatar;
 
-  const bubbleRadius = (isOwn: boolean, isFirstInGroup: boolean) => {
+  const bubbleRadius = (isOwn: boolean, isFirstInGroup: boolean, shape: "tailed" | "rounded") => {
+    // "rounded" drops the tail — every bubble gets the same uniform corners regardless of
+    // which side it's on or whether it starts a new run from that sender.
+    if (shape === "rounded") return "18px";
     if (isOwn) {
       return isFirstInGroup ? "18px 18px 6px 18px" : "18px 6px 6px 18px";
     }
@@ -757,16 +762,18 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
             <div className="group relative">
               <div
-                style={{ borderRadius: bubbleRadius(isOwn, isFirstInGroup) }}
+                style={{ borderRadius: bubbleRadius(isOwn, isFirstInGroup, preferences.bubbleShape) }}
                 // Only animate a bubble's first appearance, not every time it scrolls back into view.
                 className={`${isFirstMount ? "animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both]" : ""} ${isCompact ? "px-2.5 py-1.5" : "px-3 py-2"} transition-transform duration-200 ${EASE} hover:-translate-y-px ${
                   isOwn
-                    ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
+                    ? preferences.bubbleFill === "solid"
+                      ? "bg-accent-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(var(--accent-rgb),.6)]"
+                      : "bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(var(--accent-rgb),.6)]"
                     : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
                 }`}
               >
                 {isGroupChat && !isOwn && isFirstInGroup && (
-                  <p className="mb-0.5 text-xs font-semibold text-[#1a7b9b] dark:text-[#60c7e3]">
+                  <p className="mb-0.5 text-xs font-semibold text-accent-600 dark:text-accent-300">
                     {getSenderName(msg)}
                   </p>
                 )}
@@ -793,7 +800,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   };
 
   const dropdownItemClass =
-    "flex items-center gap-2.5 rounded-[10px] px-3 py-2 font-medium text-gray-700 text-theme-sm transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]";
+    "flex items-center gap-2.5 rounded-[10px] px-3 py-2 font-medium text-gray-700 text-theme-sm transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300";
 
   return (
     <div className="flex h-[80vh] flex-col overflow-hidden rounded-3xl border border-gray-200/70 bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_28px_60px_-46px_rgba(16,24,40,.7)] dark:border-stone-800/70 dark:bg-[#201d1b]">
@@ -813,7 +820,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                 src={activeChat?.avatar}
                 name={chatDisplayName}
                 size={44}
-                className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]"
+                className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(var(--accent-rgb),.65)]"
               />
               {!isGroupChat && isPeerOnline && (
                 <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
@@ -829,7 +836,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             </span>
             {isGroupChat ? (
               groupActivityLabel && (
-                <span className="text-xs italic text-[#1a7b9b] dark:text-[#60c7e3]">{groupActivityLabel}</span>
+                <span className="text-xs italic text-accent-600 dark:text-accent-300">{groupActivityLabel}</span>
               )
             ) : (
               <span className={`text-xs ${isPeerOnline ? "text-success-600 dark:text-success-400" : "text-gray-400 dark:text-stone-500"}`}>
@@ -843,7 +850,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
         <div className="flex items-center gap-2">
           <button
             aria-label="Call"
-            className={`flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-[#1a7b9b] hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(26,123,155,.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-[#2596bb]`}
+            className={`flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-accent-600 hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(var(--accent-rgb),.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-accent-400`}
           >
             <Phone size={18} />
           </button>
@@ -852,7 +859,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           <div className="relative">
             <button
               aria-label="More options"
-              className={`dropdown-toggle flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-[#1a7b9b] hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(26,123,155,.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-[#2596bb]`}
+              className={`dropdown-toggle flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-accent-600 hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(var(--accent-rgb),.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-accent-400`}
               onClick={() => setIsDropdownOpen((prev) => !prev)}
             >
               <EllipsisVertical size={18} />
@@ -871,15 +878,15 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                 }}
                 baseClassName={dropdownItemClass}
               >
-                <Info className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
+                <Info className="h-4 w-4 text-accent-600 dark:text-accent-300" />
                 {isGroupChat ? "Group Info" : "Contact Info"}
               </DropdownItem>
               <DropdownItem onItemClick={() => setIsDropdownOpen(false)} baseClassName={dropdownItemClass}>
-                <Search className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
+                <Search className="h-4 w-4 text-accent-600 dark:text-accent-300" />
                 Search Messages
               </DropdownItem>
               <DropdownItem onItemClick={() => setIsDropdownOpen(false)} baseClassName={dropdownItemClass}>
-                <XCircle className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
+                <XCircle className="h-4 w-4 text-accent-600 dark:text-accent-300" />
                 Clear Chat
               </DropdownItem>
               <div className="my-1 border-t border-dashed border-gray-200 dark:border-stone-700" />
@@ -897,10 +904,9 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
       {/* Messages area */}
       <div className="relative flex-1 overflow-hidden">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-64"
-          style={{ background: "radial-gradient(1200px 400px at 50% -10%, rgba(26,123,155,.05), transparent 70%)" }}
-        />
+        {preferences.chatWallpaper !== "none" && (
+          <div aria-hidden="true" className={`pointer-events-none absolute inset-0 chat-wallpaper-${preferences.chatWallpaper}`} />
+        )}
         {/* Pinned copy of the day pill — see updatePinnedDayPill. */}
         <div
           ref={dayPillRef}
@@ -950,9 +956,9 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                         />
                       </span>
                       <div className="flex items-center gap-1 rounded-[18px_18px_18px_6px] border border-gray-200/70 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524]">
-                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0s" }} />
-                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.16s" }} />
-                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.32s" }} />
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-accent-600 dark:bg-accent-300" style={{ animationDelay: "0s" }} />
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-accent-600 dark:bg-accent-300" style={{ animationDelay: "0.16s" }} />
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-accent-600 dark:bg-accent-300" style={{ animationDelay: "0.32s" }} />
                       </div>
                     </div>
                   </div>
@@ -970,7 +976,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               onClick={scrollToBottom}
               className={`pointer-events-auto flex animate-[floatIn_.2s_cubic-bezier(.2,.8,.2,1)_both] items-center gap-1.5 rounded-full border border-gray-200/70 bg-white/85 px-3.5 py-1.5 text-xs font-medium text-gray-700 shadow-[0_10px_24px_-12px_rgba(16,24,40,.5)] backdrop-blur-md transition-all duration-200 ${EASE} hover:-translate-y-0.5 dark:border-stone-700/70 dark:bg-stone-800/85 dark:text-gray-100`}
             >
-              <ChevronDown size={14} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+              <ChevronDown size={14} className="text-accent-600 dark:text-accent-300" />
               {unseenCount} new message{unseenCount > 1 ? "s" : ""}
             </button>
           </div>
@@ -1011,12 +1017,12 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
         {/* Chat input row */}
         <div
-          className={`flex items-center gap-1 rounded-full bg-white px-2 py-1.5 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] transition-shadow duration-200 ${EASE} focus-within:ring-4 focus-within:ring-[#1a7b9b]/10 dark:bg-[#292524] dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.35)]`}
+          className={`flex items-center gap-1 rounded-full bg-white px-2 py-1.5 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] transition-shadow duration-200 ${EASE} focus-within:ring-4 focus-within:ring-accent-600/10 dark:bg-[#292524] dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.35)]`}
         >
           <button
             onClick={() => setShowAttachments(!showAttachments)}
             aria-label="Attach file"
-            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:-rotate-12 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-400 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:-rotate-12 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-400 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -1025,7 +1031,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             <button
               onClick={() => setShowEmojiPicker((prev) => !prev)}
               aria-label="Choose emoji"
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:scale-[1.12] hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-400 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+              className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:scale-[1.12] hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-400 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
             >
               <Smile className="h-5 w-5" />
             </button>
@@ -1067,7 +1073,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
           <button
             aria-label="Voice message"
-            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-400 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-400 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
           >
             <Mic className="h-5 w-5" />
           </button>
@@ -1076,7 +1082,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             onClick={handleSendMessage}
             disabled={(!message.trim() && pendingFiles.length === 0) || sending || !isConnected}
             aria-label="Send message"
-            className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[0_10px_18px_-10px_rgba(26,123,155,.75)] transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[.94] disabled:pointer-events-none disabled:opacity-40`}
+            className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-white shadow-[0_10px_18px_-10px_rgba(var(--accent-rgb),.75)] transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[.94] disabled:pointer-events-none disabled:opacity-40`}
           >
             <Send className="h-4 w-4" />
           </button>

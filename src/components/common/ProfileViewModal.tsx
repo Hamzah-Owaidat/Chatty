@@ -44,7 +44,7 @@ export default function ProfileViewModal({ isOpen, onClose, userId, presence }: 
           <button
             type="button"
             onClick={retry}
-            className="rounded-xl bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] px-4 py-2 text-sm font-medium text-white"
+            className="rounded-xl bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 px-4 py-2 text-sm font-medium text-white"
           >
             Try again
           </button>
@@ -56,7 +56,7 @@ export default function ProfileViewModal({ isOpen, onClose, userId, presence }: 
               // eslint-disable-next-line @next/next/no-img-element -- remote CDN URL
               <img src={profile.backgroundImage} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="h-full w-full bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d]" />
+              <div className="h-full w-full bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700" />
             )}
           </div>
 

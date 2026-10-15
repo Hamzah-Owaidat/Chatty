@@ -44,7 +44,7 @@ const Input: FC<InputProps> = ({
     : "";
 
   const inputClasses = twMerge(
-    "w-full rounded-2xl border border-gray-300 bg-white px-4 py-[13px] text-sm text-gray-800 placeholder:text-gray-400 outline-none appearance-none shadow-[inset_0_1px_2px_rgba(16,24,40,.04)] transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] focus:-translate-y-px focus:border-[#1a7b9b] focus:ring-4 focus:ring-[#1a7b9b]/12 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-[#292524] dark:text-white/90 dark:placeholder:text-white/30 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.3)]",
+    "w-full rounded-2xl border border-gray-300 bg-white px-4 py-[13px] text-sm text-gray-800 placeholder:text-gray-400 outline-none appearance-none shadow-[inset_0_1px_2px_rgba(16,24,40,.04)] transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] focus:-translate-y-px focus:border-accent-600 focus:ring-4 focus:ring-accent-600/12 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-[#292524] dark:text-white/90 dark:placeholder:text-white/30 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.3)]",
     stateBorderClasses,
     className
   );

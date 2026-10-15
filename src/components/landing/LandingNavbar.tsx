@@ -51,7 +51,7 @@ export default function LandingNavbar() {
           {signedIn ? (
             <Link
               href="/chat"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1a7b9b] px-4 py-2 text-sm font-medium text-white shadow-[0_10px_20px_-12px_rgba(26,123,155,.8)] transition hover:bg-[#166b87] dark:bg-[#2596bb] dark:hover:bg-[#2085a6]"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-accent-600 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_20px_-12px_rgba(var(--accent-rgb),.8)] transition hover:bg-accent-hover dark:bg-accent-400 dark:hover:bg-accent-hover-dark"
             >
               Open chat
               <ArrowRight size={16} />
@@ -63,7 +63,7 @@ export default function LandingNavbar() {
               </Link>
               <Link
                 href="/auth/signup"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1a7b9b] px-4 py-2 text-sm font-medium text-white shadow-[0_10px_20px_-12px_rgba(26,123,155,.8)] transition hover:bg-[#166b87] dark:bg-[#2596bb] dark:hover:bg-[#2085a6]"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-accent-600 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_20px_-12px_rgba(var(--accent-rgb),.8)] transition hover:bg-accent-hover dark:bg-accent-400 dark:hover:bg-accent-hover-dark"
               >
                 Get started
                 <ArrowRight size={16} />
@@ -100,7 +100,7 @@ export default function LandingNavbar() {
               <Link
                 href="/chat"
                 onClick={closeMenu}
-                className="rounded-xl bg-[#1a7b9b] px-4 py-2.5 text-center text-sm font-medium text-white dark:bg-[#2596bb]"
+                className="rounded-xl bg-accent-600 px-4 py-2.5 text-center text-sm font-medium text-white dark:bg-accent-400"
               >
                 Open chat
               </Link>
@@ -112,7 +112,7 @@ export default function LandingNavbar() {
                 <Link
                   href="/auth/signup"
                   onClick={closeMenu}
-                  className="rounded-xl bg-[#1a7b9b] px-4 py-2.5 text-center text-sm font-medium text-white dark:bg-[#2596bb]"
+                  className="rounded-xl bg-accent-600 px-4 py-2.5 text-center text-sm font-medium text-white dark:bg-accent-400"
                 >
                   Get started
                 </Link>

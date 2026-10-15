@@ -24,7 +24,7 @@ export default function LoadingSpinner({
   const spinner = (
     <div
       className={clsx(
-        "animate-spin rounded-full border-t-transparent border-[#1a7b9b]",
+        "animate-spin rounded-full border-t-transparent border-accent-600",
         sizeClasses[size]
       )}
     />

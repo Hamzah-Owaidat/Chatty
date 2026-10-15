@@ -30,7 +30,7 @@ export function FeaturesSection() {
                 key={feature.id}
                 className="group rounded-2xl border border-gray-200/70 bg-white p-6 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-24px_rgba(16,24,40,.35)] dark:border-stone-800/70 dark:bg-stone-900"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1a7b9b]/10 text-[#1a7b9b] transition group-hover:bg-[#1a7b9b] group-hover:text-white dark:bg-[#2596bb]/15 dark:text-[#60c7e3]">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-600/10 text-accent-600 transition group-hover:bg-accent-600 group-hover:text-white dark:bg-accent-400/15 dark:text-accent-300">
                   <Icon size={20} aria-hidden="true" />
                 </span>
                 <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-white">{feature.title}</h3>
@@ -58,7 +58,7 @@ export function HowItWorksSection() {
         <ol className="mt-10 grid gap-6 md:grid-cols-3">
           {LANDING_STEPS.map((step, index) => (
             <li key={step.id} className="relative rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,.04)] dark:bg-stone-900">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1a7b9b] text-sm font-semibold text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-600 text-sm font-semibold text-white">
                 {index + 1}
               </span>
               <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-white">{step.title}</h3>

@@ -402,7 +402,7 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
             onKeyDown={(e) => e.key === "Enter" && !sending && handleSend()}
             placeholder="Add a caption..."
             disabled={sending}
-            className="w-full rounded-full bg-white/10 px-4 py-2.5 text-sm text-white placeholder-white/50 outline-none focus:ring-2 focus:ring-[#60c7e3]/50 disabled:opacity-60"
+            className="w-full rounded-full bg-white/10 px-4 py-2.5 text-sm text-white placeholder-white/50 outline-none focus:ring-2 focus:ring-accent-300/50 disabled:opacity-60"
           />
           <div className="flex items-center justify-between">
             <button
@@ -418,7 +418,7 @@ export default function CameraCaptureModal({ isOpen, onClose, onSend }: CameraCa
               onClick={handleSend}
               disabled={sending}
               aria-label="Send"
-              className="flex h-12 min-w-12 items-center justify-center gap-2 rounded-full bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] px-4 font-medium shadow-[0_10px_18px_-10px_rgba(26,123,155,.75)] disabled:opacity-80"
+              className="flex h-12 min-w-12 items-center justify-center gap-2 rounded-full bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 px-4 font-medium shadow-[0_10px_18px_-10px_rgba(var(--accent-rgb),.75)] disabled:opacity-80"
             >
               {sending ? (
                 <>

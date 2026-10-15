@@ -65,7 +65,7 @@ export default function AvatarUpload({ imageUrl, fallbackText, onUpload, size = 
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-3xl font-semibold text-white shadow-[0_14px_30px_-18px_rgba(26,123,155,.8)]">
+      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-3xl font-semibold text-white shadow-[0_14px_30px_-18px_rgba(var(--accent-rgb),.8)]">
         {shownImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- remote CDN or local object URL
           <img src={shownImage} alt={fallbackText} className="h-full w-full object-cover" />
@@ -87,7 +87,7 @@ export default function AvatarUpload({ imageUrl, fallbackText, onUpload, size = 
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
           aria-label="Change picture"
-          className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#1a7b9b] text-white shadow-md transition-transform duration-200 hover:scale-110 disabled:opacity-60 dark:border-stone-900 dark:bg-[#2596bb]"
+          className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-accent-600 text-white shadow-md transition-transform duration-200 hover:scale-110 disabled:opacity-60 dark:border-stone-900 dark:bg-accent-400"
         >
           <Camera className="h-4 w-4" />
         </button>

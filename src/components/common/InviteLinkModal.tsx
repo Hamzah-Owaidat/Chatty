@@ -81,12 +81,12 @@ export default function InviteLinkModal({ isOpen, onClose }: InviteLinkModalProp
               readOnly
               value={link}
               onFocus={(e) => e.target.select()}
-              className="min-w-0 flex-1 truncate rounded-xl bg-gray-100 px-3.5 py-2.5 text-sm text-gray-700 outline-none ring-1 ring-transparent transition focus:bg-white focus:ring-[#1a7b9b]/50 dark:bg-stone-800 dark:text-gray-200 dark:focus:ring-[#2596bb]/60"
+              className="min-w-0 flex-1 truncate rounded-xl bg-gray-100 px-3.5 py-2.5 text-sm text-gray-700 outline-none ring-1 ring-transparent transition focus:bg-white focus:ring-accent-600/50 dark:bg-stone-800 dark:text-gray-200 dark:focus:ring-accent-400/60"
             />
             <button
               onClick={handleCopy}
               aria-label="Copy invite link"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1a7b9b] text-white transition hover:bg-[#166b87] active:scale-95 dark:bg-[#2596bb] dark:hover:bg-[#2085a6]"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-600 text-white transition hover:bg-accent-hover active:scale-95 dark:bg-accent-400 dark:hover:bg-accent-hover-dark"
             >
               {copied ? <Check size={16} /> : <Copy size={16} />}
             </button>

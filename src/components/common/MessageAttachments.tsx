@@ -149,7 +149,7 @@ function DownloadControl({
 }) {
   const radius = size / 2 - 3;
   const circumference = 2 * Math.PI * radius;
-  const surface = dark ? "bg-[#1a7b9b] text-white" : "bg-black/45 text-white backdrop-blur-sm";
+  const surface = dark ? "bg-accent-600 text-white" : "bg-black/45 text-white backdrop-blur-sm";
 
   if (status === "downloading") {
     return (

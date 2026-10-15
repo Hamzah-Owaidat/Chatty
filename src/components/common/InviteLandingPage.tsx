@@ -72,7 +72,7 @@ export default function InviteLandingPage({ token }: { token: string }) {
           This invite link isn&apos;t valid
         </h1>
         <p className="max-w-sm text-sm text-gray-500 dark:text-stone-400">{errorMsg}</p>
-        <Link href="/chat" className="text-sm text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]">
+        <Link href="/chat" className="text-sm text-accent-600 hover:text-accent-link-hover dark:text-accent-300">
           Go to Chatty
         </Link>
       </div>
@@ -98,7 +98,7 @@ export default function InviteLandingPage({ token }: { token: string }) {
       <div className="flex w-full max-w-xs flex-col gap-3">
         <Link
           href={`/auth/signin?redirect=${encodeURIComponent(redirectTarget)}`}
-          className={`flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_16px_30px_-16px_rgba(26,123,155,.75)] transition-all duration-200 ${EASE} hover:-translate-y-px`}
+          className={`flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_16px_30px_-16px_rgba(var(--accent-rgb),.75)] transition-all duration-200 ${EASE} hover:-translate-y-px`}
         >
           <MessageCircle size={16} />
           Sign in
