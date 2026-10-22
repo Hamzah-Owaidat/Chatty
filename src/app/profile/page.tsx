@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from "emoji-picker-react";
 import { ArrowLeft, AtSign, Mail, Smile, User as UserIcon } from "lucide-react";
@@ -16,6 +17,10 @@ import { useTheme } from "@/context/ThemeContext";
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 const BIO_MAX_LENGTH = 160;
+// emoji-picker-react's own default footprint — used to keep the portaled popover on screen.
+const EMOJI_PICKER_WIDTH = 350;
+const EMOJI_PICKER_HEIGHT = 450;
+const VIEWPORT_MARGIN = 8;
 
 const disabledFieldClass =
     "w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-500 outline-none dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-400 cursor-not-allowed";
@@ -38,7 +43,9 @@ export default function ProfilePage() {
     const [bioDraft, setBioDraft] = useState(user?.bio || "");
     const [saving, setSaving] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const emojiPickerRef = useRef<HTMLDivElement>(null);
+    const [emojiPickerCoords, setEmojiPickerCoords] = useState<{ top: number; left: number } | null>(null);
+    const emojiButtonRef = useRef<HTMLDivElement>(null);
+    const emojiPanelRef = useRef<HTMLDivElement>(null);
 
     // Re-seed the drafts only when the signed-in user itself changes (e.g. first load) —
     // not on every store update, so an in-progress edit of one field survives an unrelated
@@ -53,13 +60,46 @@ export default function ProfilePage() {
         if (!showEmojiPicker) return;
 
         const handleClickOutside = (event: MouseEvent) => {
-            if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
-                setShowEmojiPicker(false);
-            }
+            const target = event.target as Node;
+            if (emojiButtonRef.current?.contains(target)) return;
+            if (emojiPanelRef.current?.contains(target)) return;
+            setShowEmojiPicker(false);
         };
 
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showEmojiPicker]);
+
+    // The picker is portaled to <body> and positioned from the trigger button's live
+    // bounding rect — it previously rendered inline inside the profile card's
+    // `overflow-hidden` wrapper, which clipped most of the popover instead of showing it.
+    useLayoutEffect(() => {
+        if (!showEmojiPicker) return;
+
+        const updatePosition = () => {
+            const el = emojiButtonRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+
+            const left = Math.min(
+                Math.max(rect.right - EMOJI_PICKER_WIDTH, VIEWPORT_MARGIN),
+                window.innerWidth - EMOJI_PICKER_WIDTH - VIEWPORT_MARGIN
+            );
+            const fitsBelow = rect.bottom + 8 + EMOJI_PICKER_HEIGHT <= window.innerHeight - VIEWPORT_MARGIN;
+            const top = fitsBelow
+                ? rect.bottom + 8
+                : Math.max(rect.top - EMOJI_PICKER_HEIGHT - 8, VIEWPORT_MARGIN);
+
+            setEmojiPickerCoords({ top, left });
+        };
+
+        updatePosition();
+        window.addEventListener("scroll", updatePosition, true);
+        window.addEventListener("resize", updatePosition);
+        return () => {
+            window.removeEventListener("scroll", updatePosition, true);
+            window.removeEventListener("resize", updatePosition);
+        };
     }, [showEmojiPicker]);
 
     // Show loading while initializing or fetching user
@@ -245,7 +285,7 @@ export default function ProfilePage() {
                                     <div className="mb-1.5 flex items-center justify-between">
                                         <span className="text-xs font-medium text-gray-600 dark:text-stone-300">Bio</span>
                                         <div className="flex items-center gap-2">
-                                            <div className="relative" ref={emojiPickerRef}>
+                                            <div className="relative" ref={emojiButtonRef}>
                                                 <button
                                                     type="button"
                                                     onClick={() => setShowEmojiPicker((prev) => !prev)}
@@ -254,15 +294,22 @@ export default function ProfilePage() {
                                                 >
                                                     <Smile className="h-4 w-4" />
                                                 </button>
-                                                {showEmojiPicker && (
-                                                    <div className="absolute right-0 top-full z-40 mt-2">
-                                                        <EmojiPicker
-                                                            onEmojiClick={handleEmojiClick}
-                                                            theme={resolvedTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
-                                                            lazyLoadEmojis
-                                                        />
-                                                    </div>
-                                                )}
+                                                {showEmojiPicker &&
+                                                    emojiPickerCoords &&
+                                                    createPortal(
+                                                        <div
+                                                            ref={emojiPanelRef}
+                                                            style={{ top: emojiPickerCoords.top, left: emojiPickerCoords.left }}
+                                                            className="fixed z-[999] animate-[floatIn_.15s_cubic-bezier(.2,.8,.2,1)_both] overflow-hidden rounded-2xl shadow-[0_1px_2px_rgba(16,24,40,.04),0_24px_48px_-24px_rgba(16,24,40,.55)]"
+                                                        >
+                                                            <EmojiPicker
+                                                                onEmojiClick={handleEmojiClick}
+                                                                theme={resolvedTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
+                                                                lazyLoadEmojis
+                                                            />
+                                                        </div>,
+                                                        document.body
+                                                    )}
                                             </div>
                                             <span className="text-[11px] text-gray-400 dark:text-stone-500">
                                                 {bioDraft.length}/{BIO_MAX_LENGTH}
