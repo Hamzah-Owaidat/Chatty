@@ -58,3 +58,6 @@ ds-bundle/
 test-results/
 playwright-report/
 blob-report/
+
+# package lock file
+package-lock.json
