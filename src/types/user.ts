@@ -14,6 +14,8 @@ export interface User {
   pendingEmail?: string | null;
   notificationPreferences?: NotificationPreferences;
   lastSeenVisibility?: LastSeenVisibility;
+  // Reciprocal: while off, others don't see your reads and you don't see theirs.
+  readReceiptsEnabled?: boolean;
   // add other fields as needed
 }
 

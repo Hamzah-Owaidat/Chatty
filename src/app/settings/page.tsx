@@ -29,6 +29,7 @@ import ChangePasswordSetting from "@/components/settings/ChangePasswordSetting";
 import ChangeEmailSetting from "@/components/settings/ChangeEmailSetting";
 import LastSeenSetting from "@/components/settings/LastSeenSetting";
 import NotificationSettings from "@/components/settings/NotificationSettings";
+import ReadReceiptsSetting from "@/components/settings/ReadReceiptsSetting";
 
 type SectionId = "appearance" | "chat" | "storage" | "security" | "privacy" | "notifications" | "danger";
 
@@ -306,12 +307,8 @@ export default function SettingsPage() {
                             {activeSection === "privacy" && (
                                 <div className="space-y-3">
                                     <LastSeenSetting />
-                                    <PlaceholderRows
-                                        rows={[
-                                            { icon: Shield, label: "Read receipts" },
-                                            { icon: UserX, label: "Blocked users" },
-                                        ]}
-                                    />
+                                    <ReadReceiptsSetting />
+                                    <PlaceholderRows rows={[{ icon: UserX, label: "Blocked users" }]} />
                                 </div>
                             )}
 

@@ -115,3 +115,17 @@ export async function removeLastSeenContact(userId: string): Promise<LastSeenPri
     rethrowApiError(err);
   }
 }
+
+// PATCH /api/user/me/privacy/readreceipts — { enabled }.
+export async function updateReadReceipts(enabled: boolean): Promise<boolean> {
+  try {
+    const response = await api.patch<ApiEnvelope<{ enabled: boolean }>>(
+      '/user/me/privacy/readreceipts',
+      { enabled },
+      { headers: authHeaders() }
+    );
+    return response.data.data.enabled;
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
