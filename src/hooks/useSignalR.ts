@@ -1,18 +1,35 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { HubConnection, HubConnectionState } from '@microsoft/signalr';
 import { startSignalRConnection, stopSignalRConnection, getSignalRConnection } from '@/lib/signalr/signalr';
-import { ChatMessage } from '@/types/chat/chat.models';
+import { ChatMessage, MessageUpdatedDto } from '@/types/chat/chat.models';
+import { normalizeMessageStatus } from '@/utils/messageStatus';
 
-export const useSignalR = (chatId: string | null) => {
+export const useSignalR = (chatId: string | null, currentUserId?: string) => {
   const [connection, setConnection] = useState<HubConnection | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const chatIdRef = useRef<string | null>(chatId);
+  const currentUserIdRef = useRef<string | undefined>(currentUserId);
 
   // Keep chatId ref updated
   useEffect(() => {
     chatIdRef.current = chatId;
   }, [chatId]);
+
+  // Keep currentUserId ref updated
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
+
+  // Marks the whole chat as read (server ignores messageId and marks everything up to now)
+  const markChatAsRead = useCallback(async (conn: HubConnection, targetChatId: string) => {
+    try {
+      await conn.invoke('MarkMessageAsRead', targetChatId, '');
+      console.log(`Marked chat ${targetChatId} as read on open`);
+    } catch (err) {
+      console.error('❌ Error marking chat as read:', err);
+    }
+  }, []);
 
   // Initialize SignalR connection
   useEffect(() => {
@@ -23,6 +40,7 @@ export const useSignalR = (chatId: string | null) => {
     let handleMessageReceived:
       | ((message: any) => void)
       | null = null;
+    let handleMessagesUpdated: ((dto: MessageUpdatedDto) => void) | null = null;
     let handleReconnecting: (() => void) | null = null;
     let handleReconnected: (() => void) | null = null;
     let handleClose: ((error?: Error) => void) | null = null;
@@ -78,11 +96,13 @@ export const useSignalR = (chatId: string | null) => {
                 chatId: String(messageChatId || currentChatId || ''),
                 sentAt: message.sentAt || message.createdAt || message.timestamp,
                 timestamp: message.sentAt || message.createdAt || message.timestamp,
-                status: message.status,
+                status: normalizeMessageStatus(message.status),
+                type: message.type,
+                attachments: message.attachments || [],
                 sender: message.sender,
                 chat: message.chat,
               };
-              
+
               console.log('✅ Adding message to state:', transformedMessage);
               setMessages((prev) => {
                 // 1) If we already have this final message id, ignore
@@ -110,12 +130,41 @@ export const useSignalR = (chatId: string | null) => {
                 console.log(`📝 Message added. Total messages: ${filtered.length + 1}`);
                 return [...filtered, transformedMessage];
               });
+
+              // A message from someone else just arrived while this chat is open in front of
+              // the user — tell the server it's read instead of waiting for the next JoinChat.
+              const isOwnMessage =
+                !!currentUserIdRef.current && transformedMessage.senderId === currentUserIdRef.current;
+              if (!isOwnMessage && messageChatId === currentChatId) {
+                markChatAsRead(conn, currentChatId as string);
+              }
             } else {
               console.log('⚠️ Message filtered out:', {
                 reason: !isMounted ? 'Component unmounted' : 'Wrong chatId',
                 messageChatId,
                 currentChatId
               });
+            }
+          };
+
+          // Flip a sent bubble to "seen" only once every participant has read it —
+          // readMessageIds is authoritative (backed by each message's ReadByUserIds vs.
+          // the chat's participant count), unlike guessing from a single reader's
+          // lastReadAt, which would flip a group message "seen" the moment just one of
+          // several participants opened the chat.
+          handleMessagesUpdated = (dto: MessageUpdatedDto) => {
+            console.log('👀 MessagesUpdated received:', dto);
+            const currentChatId = chatIdRef.current;
+            if (!dto || dto.chatId !== currentChatId) return;
+
+            const readIds = dto.readMessageIds;
+            if (!readIds || readIds.length === 0) return;
+
+            if (isMounted) {
+              const readIdSet = new Set(readIds);
+              setMessages((prev) =>
+                prev.map((m) => (m.status !== 'seen' && readIdSet.has(m.id) ? { ...m, status: 'seen' } : m))
+              );
             }
           };
 
@@ -143,6 +192,7 @@ export const useSignalR = (chatId: string | null) => {
 
           // Register handlers with .on(...)
           conn.on('MessageReceived', handleMessageReceived);
+          conn.on('MessagesUpdated', handleMessagesUpdated);
           conn.on('reconnecting', handleReconnecting);
           conn.on('reconnected', handleReconnected);
           conn.on('close', handleClose);
@@ -169,6 +219,9 @@ export const useSignalR = (chatId: string | null) => {
         if (handleMessageReceived) {
           currentConnection.off('MessageReceived', handleMessageReceived);
         }
+        if (handleMessagesUpdated) {
+          currentConnection.off('MessagesUpdated', handleMessagesUpdated);
+        }
         if (handleReconnecting) {
           currentConnection.off('reconnecting', handleReconnecting);
         }
@@ -182,6 +235,8 @@ export const useSignalR = (chatId: string | null) => {
         stopSignalRConnection();
       }
     };
+    // markChatAsRead is a stable (empty-deps) callback; this effect intentionally runs once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   // Join chat room when chatId changes
@@ -201,6 +256,10 @@ export const useSignalR = (chatId: string | null) => {
         await connection.invoke('JoinChat', chatId);
         console.log(`✅ Successfully joined chat: ${chatId}`);
         console.log(`📡 Now listening for real-time messages in chat: ${chatId}`);
+
+        // Presence alone only covers messages sent after we joined — mark everything
+        // already sent to us as read too (server marks the whole chat, not one message).
+        await markChatAsRead(connection, chatId);
       } catch (err) {
         console.error('❌ Error joining chat:', err);
       }
@@ -218,21 +277,25 @@ export const useSignalR = (chatId: string | null) => {
         });
       }
     };
-  }, [connection, chatId, isConnected]);
+  }, [connection, chatId, isConnected, markChatAsRead]);
 
   // Send a message via SignalR Hub (ChatHub.SendMessage)
   // Backend signature: Task<Message> SendMessage(string chatId, Message message)
   const sendMessage = useCallback(
-    async (content: string, senderId?: string) => {
+    async (content: string, senderId?: string, attachmentIds: string[] = []) => {
       if (!connection || !chatId || !isConnected) {
         throw new Error('Not connected to chat');
       }
 
       try {
-        // Match backend Message model (PascalCase properties)
-        const payload: { Content: string; SenderId?: string } = { Content: content };
+        // Match backend Message model (PascalCase properties). AttachmentIds are the
+        // ids of files already uploaded via POST /chat/{chatId}/files.
+        const payload: { Content: string; SenderId?: string; AttachmentIds?: string[] } = { Content: content };
         if (senderId) {
           payload.SenderId = senderId;
+        }
+        if (attachmentIds.length > 0) {
+          payload.AttachmentIds = attachmentIds;
         }
 
         console.log('📡 Sending message via SignalR hub SendMessage:', {

@@ -1,22 +1,99 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Send, Paperclip, Mic, Image, FileText, Camera, Check, CheckCheck, Phone, EllipsisVertical, Info, Trash2, XCircle, Search, Smile, ChevronDown } from "lucide-react";
 import EmojiPicker, { EmojiClickData, Theme as EmojiTheme } from "emoji-picker-react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { useSignalR } from "@/hooks/useSignalR";
+import { usePresence } from "@/hooks/usePresence";
+import { useChatActivity } from "@/hooks/useChatActivity";
+import { getActivityLabel } from "@/utils/chatActivity";
+import { formatRelativeTime, dayKey, formatDayDivider } from "@/utils/time";
+import { useNow } from "@/hooks/useNow";
+import { HubConnectionState } from "@microsoft/signalr";
 import { getMessages } from "@/lib/api/message";
-import { ChatMessage } from "@/types/chat/chat.models";
+import { ChatMessage, ChatParticipant, ParticipantAddedDto, ParticipantRemovedDto, ChatDetailsUpdatedDto, BackendMessageType } from "@/types/chat/chat.models";
 import { useAppSelector } from "@/store/hooks";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useTheme } from "@/context/ThemeContext";
+import { usePreferences } from "@/context/PreferencesContext";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { normalizeMessageStatus } from "@/utils/messageStatus";
+import { useChat } from "@/context/ChatContext";
+import { useModal } from "@/hooks/useModal";
+import GroupInfoModal from "./GroupInfoModal";
+import ProfileViewModal from "./ProfileViewModal";
+import UserHoverCard from "./UserHoverCard";
+import MessageAttachments from "./MessageAttachments";
+import PendingAttachments, { PendingFile } from "./PendingAttachments";
+import { uploadChatFiles, deleteFile } from "@/lib/api/file";
+import { mediaKey, putCachedMedia } from "@/lib/media/mediaCache";
+import { FileKind, MessageAttachment } from "@/types/file.models";
+import { acceptAttribute, getFileKind, validateFile } from "@/utils/file";
+import { createPreview } from "@/utils/preview";
+import { useUploadLimits } from "@/hooks/useUploadLimits";
+import CameraCaptureModal, { isCameraSupported } from "./CameraCaptureModal";
+import UserAvatar from "@/components/common/UserAvatar";
+import VirtualList, { VirtualListHandle, VirtualListItemMeta } from "./VirtualList";
+import LoadingSpinner from "./LoadingSpinner";
 
 interface ChatWindowProps {
   chatId: string;
 }
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
+
+// Pinned day pill: its offset from the top of the list (keep in sync with its `top-3`
+// class), and a height with some slack so sliding it up by offset + height takes it
+// fully out of view.
+const DAY_PILL_TOP = 12;
+const DAY_PILL_HEIGHT = 32;
+
+// Messages per request: the latest page when a chat opens, then one more older page
+// each time the user scrolls to the top.
+const MESSAGE_PAGE_SIZE = 50;
+
+const DAY_PILL_CLASS =
+  "rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 shadow-[0_1px_2px_rgba(16,24,40,.08)] backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400";
+
+// Helper to ensure content is always a string
+const ensureStringContent = (content: any): string => {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (content === null || content === undefined) {
+    return '';
+  }
+  if (typeof content === 'object') {
+    // If it's an object, try to extract a meaningful string
+    if (content.text) return String(content.text);
+    if (content.message) return String(content.message);
+    // Otherwise, stringify it
+    return JSON.stringify(content);
+  }
+  return String(content);
+};
+
+// Flattens a REST-fetched message into the shape the list renders.
+const toChatMessage = (msg: any, chatId: string): ChatMessage => ({
+  id: String(msg.id || ''),
+  content: ensureStringContent(msg.content),
+  senderId: String(msg.senderId || msg.sender?.id || ''),
+  chatId: String(msg.chatId || msg.chat?.id || chatId),
+  timestamp: msg.sentAt || msg.createdAt || msg.timestamp || new Date().toISOString(),
+  sentAt: msg.sentAt,
+  createdAt: msg.createdAt,
+  isRead: msg.isRead,
+  status: normalizeMessageStatus(msg.status),
+  type: msg.type,
+  attachments: msg.attachments || [],
+  // Keep nested objects for future use
+  sender: msg.sender,
+  chat: msg.chat,
+});
+
+const messageTimestamp = (msg: ChatMessage) => msg.sentAt || msg.timestamp || msg.createdAt;
 
 export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [message, setMessage] = useState("");
@@ -26,104 +103,288 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   const [sending, setSending] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [unseenCount, setUnseenCount] = useState(0);
-  // Reserved for a future "peer is typing" SignalR event — presentational only, never set today.
-  const [isPeerTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messageListRef = useRef<HTMLDivElement>(null);
-  const lastMessageCountRef = useRef(0);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const messageListRef = useRef<VirtualListHandle>(null);
+  const currentChatIdRef = useRef(chatId);
+  const isAtBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<string | undefined>(undefined);
+  const lastScrollTopRef = useRef(0);
+  const dayPillShiftRef = useRef(0);
+  const pinnedDayRef = useRef<string | undefined>(undefined);
+  const dayPillRef = useRef<HTMLDivElement>(null);
+  const dayPillLabelRef = useRef<HTMLSpanElement>(null);
+  const lastActivitySentAtRef = useRef(0);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const uploadLimits = useUploadLimits();
   const currentUser = useAppSelector((state) => state.auth.user);
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const { preferences } = usePreferences();
+  const reducedMotion = useReducedMotion();
+  const { activeChat, setActiveChat } = useChat();
+  const groupInfoModal = useModal();
+  const contactInfoModal = useModal();
 
   // Use SignalR hook for real-time messaging
-  const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage } = useSignalR(chatId);
+  const { messages, setMessages, sendMessage: sendSignalRMessage, isConnected, addMessage, connection } = useSignalR(chatId, currentUser?.id);
+  const presence = usePresence();
+  const chatActivity = useChatActivity();
+  // Ticks a re-render every 30s so "Last seen Xm ago" stays live without a refresh.
+  useNow(30000);
 
-  // Helper to ensure content is always a string
-  const ensureStringContent = (content: any): string => {
-    if (typeof content === 'string') {
-      return content;
-    }
-    if (content === null || content === undefined) {
-      return '';
-    }
-    if (typeof content === 'object') {
-      // If it's an object, try to extract a meaningful string
-      if (content.text) return String(content.text);
-      if (content.message) return String(content.message);
-      // Otherwise, stringify it
-      return JSON.stringify(content);
-    }
-    return String(content);
+  // Any activity entry for this chatId is necessarily from the other participant —
+  // the server excludes the sender from its own broadcast recipients.
+  const peerActivity = chatActivity[chatId];
+  const isPeerTyping = !!peerActivity;
+
+  const ACTIVITY_THROTTLE_MS = 2000;
+
+  const notifyTyping = () => {
+    if (!connection || connection.state !== HubConnectionState.Connected || !chatId) return;
+
+    const now = Date.now();
+    if (now - lastActivitySentAtRef.current < ACTIVITY_THROTTLE_MS) return;
+    lastActivitySentAtRef.current = now;
+
+    connection.invoke("SendActivity", chatId, "typing").catch((err) => {
+      console.error("Failed to send typing activity:", err);
+    });
   };
 
-  // Fetch existing messages when chatId changes
   useEffect(() => {
+    currentChatIdRef.current = chatId;
+  }, [chatId]);
+
+  // Opening a chat loads only its latest page; older pages load as the user scrolls up
+  // (loadOlderMessages). Everything from the previous chat is reset first.
+  useEffect(() => {
+    if (!chatId) return;
+    let cancelled = false;
+
+    setMessages([]);
+    setMessagesLoading(true);
+    setHasOlderMessages(false);
+    setLoadingOlderMessages(false);
+    setUnseenCount(0);
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
+    lastMessageIdRef.current = undefined;
+    pinnedDayRef.current = undefined;
+    lastScrollTopRef.current = 0;
+
     const fetchMessages = async () => {
       try {
-        const fetchedMessages = await getMessages(chatId);
-        // Transform messages to match our format
-        const transformedMessages: ChatMessage[] = fetchedMessages.map((msg: any) => {
-          // Extract nested properties and flatten
-          const transformed: ChatMessage = {
-            id: String(msg.id || ''),
-            content: ensureStringContent(msg.content),
-            senderId: String(msg.senderId || msg.sender?.id || ''),
-            chatId: String(msg.chatId || msg.chat?.id || chatId),
-            timestamp: msg.sentAt || msg.createdAt || msg.timestamp || new Date().toISOString(),
-            sentAt: msg.sentAt,
-            createdAt: msg.createdAt,
-            isRead: msg.isRead,
-            status: msg.status,
-            // Keep nested objects for future use
-            sender: msg.sender,
-            chat: msg.chat,
-          };
-          return transformed;
-        });
-        // Ensure oldest-to-newest order regardless of API ordering
-        transformedMessages.sort(
-          (a, b) =>
-            new Date(a.sentAt || a.createdAt || a.timestamp || 0).getTime() -
-            new Date(b.sentAt || b.createdAt || b.timestamp || 0).getTime()
-        );
-        setMessages(transformedMessages);
+        const page = await getMessages(chatId, { top: MESSAGE_PAGE_SIZE });
+        if (cancelled) return;
+
+        const fetched = page.map((msg) => toChatMessage(msg, chatId));
+        const fetchedIds = new Set(fetched.map((m) => m.id));
+        // Keep anything that arrived live over SignalR while the page was loading.
+        setMessages((prev) => [...fetched, ...prev.filter((m) => m.chatId === chatId && !fetchedIds.has(m.id))]);
+        setHasOlderMessages(page.length === MESSAGE_PAGE_SIZE);
       } catch (err) {
+        if (cancelled) return;
         console.error("Error fetching messages:", err);
         showToast.error(getErrorMessage(err));
+      } finally {
+        if (!cancelled) setMessagesLoading(false);
       }
     };
 
-    if (chatId) {
-      fetchMessages();
-    }
+    fetchMessages();
+
+    return () => {
+      cancelled = true;
+    };
   }, [chatId, setMessages]);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // Cursor paging: ask for the page right before the oldest message we hold.
+  const loadOlderMessages = async () => {
+    if (loadingOlderMessages || !hasOlderMessages) return;
 
-  // Track unseen message count while the user has scrolled up from the bottom
-  useEffect(() => {
-    const prevCount = lastMessageCountRef.current;
-    if (messages.length > prevCount && !isAtBottom) {
-      setUnseenCount((c) => c + (messages.length - prevCount));
+    const oldest = messages.find((m) => !m.id.startsWith("temp-"));
+    if (!oldest) return;
+
+    const requestChatId = chatId;
+    setLoadingOlderMessages(true);
+
+    try {
+      const page = await getMessages(requestChatId, { top: MESSAGE_PAGE_SIZE, before: oldest.id });
+      if (currentChatIdRef.current !== requestChatId) return;
+
+      const older = page.map((msg) => toChatMessage(msg, requestChatId));
+      setMessages((prev) => {
+        const loadedIds = new Set(prev.map((m) => m.id));
+        return [...older.filter((m) => !loadedIds.has(m.id)), ...prev];
+      });
+      setHasOlderMessages(page.length === MESSAGE_PAGE_SIZE);
+    } catch (err) {
+      if (currentChatIdRef.current !== requestChatId) return;
+      console.error("Error fetching older messages:", err);
+      showToast.error(getErrorMessage(err));
+    } finally {
+      if (currentChatIdRef.current === requestChatId) setLoadingOlderMessages(false);
     }
-    lastMessageCountRef.current = messages.length;
-  }, [messages, isAtBottom]);
+  };
 
-  const handleMessageListScroll = () => {
-    const el = messageListRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const atBottom = distanceFromBottom < 120;
+  // Live: reflect another admin's participant/detail changes for this chat while it's
+  // open, without needing a refetch. (Our own changes, made via GroupInfoModal, are
+  // already applied locally the moment the API call succeeds.)
+  useEffect(() => {
+    if (!connection || !chatId || !activeChat) return;
+
+    const handleParticipantAdded = (dto: ParticipantAddedDto) => {
+      if (dto.chatId !== chatId || dto.participant.id === currentUser?.id) return;
+      setActiveChat({
+        ...activeChat,
+        participants: [
+          ...(activeChat.participants || []).filter((p) => p.id !== dto.participant.id),
+          dto.participant,
+        ],
+      });
+    };
+
+    const handleParticipantRemoved = (dto: ParticipantRemovedDto) => {
+      if (dto.chatId !== chatId) return;
+      setActiveChat({
+        ...activeChat,
+        participants: (activeChat.participants || []).filter((p) => p.id !== dto.userId),
+      });
+    };
+
+    const handleChatUpdated = (dto: ChatDetailsUpdatedDto) => {
+      if (dto.chatId !== chatId) return;
+      setActiveChat({
+        ...activeChat,
+        name: dto.groupName || activeChat.name,
+        groupImage: dto.groupImage,
+        avatar: dto.groupImage || activeChat.avatar,
+      });
+    };
+
+    connection.on("ParticipantAdded", handleParticipantAdded);
+    connection.on("ParticipantRemoved", handleParticipantRemoved);
+    connection.on("ChatUpdated", handleChatUpdated);
+
+    return () => {
+      connection.off("ParticipantAdded", handleParticipantAdded);
+      connection.off("ParticipantRemoved", handleParticipantRemoved);
+      connection.off("ChatUpdated", handleChatUpdated);
+    };
+  }, [connection, chatId, activeChat, currentUser?.id, setActiveChat]);
+
+  // New messages scroll into view when the user is already at the bottom, or when they
+  // sent it themselves. Otherwise the view stays put and the "new messages" pill counts
+  // them. (Only appends reach this — loading an older page above doesn't.)
+  const followNewMessages = (atBottom: boolean) =>
+    atBottom || messages[messages.length - 1]?.senderId === currentUser?.id ? (reducedMotion ? "auto" : "smooth") : false;
+
+  const handleAtBottomChange = (atBottom: boolean) => {
+    isAtBottomRef.current = atBottom;
     setIsAtBottom(atBottom);
     if (atBottom) setUnseenCount(0);
   };
 
+  // Count messages from others that arrive at the end while the user is scrolled up.
+  // Compared by the last message id, so prepending an older page doesn't count.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const prevLastId = lastMessageIdRef.current;
+    lastMessageIdRef.current = last?.id;
+
+    if (!last || !prevLastId || last.id === prevLastId || isAtBottomRef.current) return;
+    if (last.senderId === currentUser?.id) return;
+
+    const prevLastIndex = messages.findIndex((m) => m.id === prevLastId);
+    setUnseenCount((c) => c + (prevLastIndex === -1 ? 1 : messages.length - 1 - prevLastIndex));
+  }, [messages, currentUser?.id]);
+
+  // Reveal the typing bubble the same way new messages are revealed — only when
+  // already at the bottom, so it doesn't yank someone away from older history.
+  useEffect(() => {
+    if (!isPeerTyping || !isAtBottomRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      const scroller = messageListRef.current?.getScroller();
+      scroller?.scrollTo({ top: scroller.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isPeerTyping, reducedMotion]);
+
+  // WhatsApp-style pinned day pill. Rows are virtualized, so there are no day sections
+  // in the DOM to make sticky — instead one overlay pill shows the day being read, and
+  // each day's first message carries an inline divider. The overlay mimics a sticky
+  // header: hidden while that day's own divider is still visible, pushed up by the next
+  // day's divider, and slid away while scrolling down (back in when scrolling up). Done
+  // on the DOM directly — re-rendering the whole list on every scroll tick isn't worth it.
+  const updatePinnedDayPill = (el: HTMLElement, fromScroll = true) => {
+    const pill = dayPillRef.current;
+    const label = dayPillLabelRef.current;
+    if (!pill || !label) return;
+
+    const dy = el.scrollTop - lastScrollTopRef.current;
+    lastScrollTopRef.current = el.scrollTop;
+    const pinLine = el.getBoundingClientRect().top + DAY_PILL_TOP;
+
+    // The day being read is the topmost row still reaching below the pin line.
+    let current: HTMLElement | undefined;
+    for (const row of el.querySelectorAll<HTMLElement>("[data-message-day]")) {
+      if (row.getBoundingClientRect().bottom > pinLine) {
+        current = row;
+        break;
+      }
+    }
+
+    const day = current?.dataset.messageDay;
+
+    // A new day took over the pin — it starts fully visible and only hides once
+    // the user keeps scrolling down past it.
+    if (day !== pinnedDayRef.current) {
+      pinnedDayRef.current = day;
+      dayPillShiftRef.current = 0;
+      label.textContent = formatDayDivider(current?.dataset.timestamp);
+    }
+
+    // Big jumps aren't the user scrolling (a page loading above shifts scrollTop by its
+    // whole height) — only real scrolling slides the pill.
+    if (fromScroll && Math.abs(dy) < el.clientHeight) {
+      dayPillShiftRef.current = Math.min(Math.max(dayPillShiftRef.current + dy, 0), DAY_PILL_TOP + DAY_PILL_HEIGHT);
+    }
+
+    let push = 0;
+    for (const divider of el.querySelectorAll<HTMLElement>("[data-day-divider]")) {
+      const top = divider.getBoundingClientRect().top;
+      if (top > pinLine) {
+        push = Math.max(0, DAY_PILL_HEIGHT - (top - pinLine));
+        break;
+      }
+    }
+
+    const ownDivider = day ? el.querySelector<HTMLElement>(`[data-day-divider="${day}"]`) : null;
+    const ownDividerVisible = !!ownDivider && ownDivider.getBoundingClientRect().top >= pinLine;
+
+    pill.style.opacity = day && !ownDividerVisible ? "1" : "0";
+    pill.style.transform = `translateY(-${Math.max(dayPillShiftRef.current, push)}px)`;
+  };
+
+  // Rows change without a scroll too (first page, an older page, a new message).
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const scroller = messageListRef.current?.getScroller();
+      if (scroller) updatePinnedDayPill(scroller, false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages, messagesLoading]);
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messageListRef.current?.scrollToBottom(reducedMotion ? "auto" : "smooth");
     setUnseenCount(0);
   };
 
@@ -148,7 +409,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
   // message box and starts typing there, instead of requiring a click first.
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (sending || !isConnected) return;
+      if (sending || !isConnected || showCamera) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key.length !== 1) return; // letters, digits, symbols, space
 
@@ -167,98 +428,379 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [sending, isConnected]);
+  }, [sending, isConnected, showCamera]);
 
   const MessageStatus = ({ status }: { status?: string }) => {
-    if (status === "sent") return <Check className="w-4 h-4 text-gray-400" />;
-    if (status === "delivered") return <CheckCheck className="w-4 h-4 text-gray-400" />;
     if (status === "seen") return <CheckCheck className="w-4 h-4 text-success-400" />;
+    if (status === "sent") return <Check className="w-4 h-4 text-gray-400" />;
     return null;
   };
 
-  const handleSendMessage = async () => {
-    if (!message.trim() || sending) return;
+  // Revoke preview object URLs of whatever is still pending when the chat closes/switches.
+  const pendingFilesRef = useRef<PendingFile[]>([]);
+  pendingFilesRef.current = pendingFiles;
+  useEffect(() => {
+    return () => {
+      pendingFilesRef.current.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+      setPendingFiles([]);
+    };
+  }, [chatId]);
 
-    const messageContent = message.trim();
-    console.log('📤 Sending message:', {
-      chatId,
-      content: messageContent,
-      senderId: currentUser?.id,
-      timestamp: new Date().toISOString()
+  const addPendingFiles = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+
+    const accepted: PendingFile[] = [];
+    // Unlimited until the server's limits load — the server rejects an oversized batch anyway.
+    const maxAttachments = uploadLimits?.maxFilesPerUpload ?? Infinity;
+    let room = maxAttachments - pendingFiles.length;
+
+    for (const file of Array.from(fileList)) {
+      const error = validateFile(file, uploadLimits);
+      if (error) {
+        showToast.error(error);
+        continue;
+      }
+
+      if (room <= 0) {
+        showToast.error(`You can attach at most ${maxAttachments} files per message.`);
+        break;
+      }
+
+      const kind = getFileKind(file.type);
+      accepted.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        kind,
+        previewUrl: kind === FileKind.Image || kind === FileKind.Video ? URL.createObjectURL(file) : undefined,
+      });
+      room--;
+    }
+
+    if (accepted.length > 0) {
+      setPendingFiles((prev) => [...prev, ...accepted]);
+      messageInputRef.current?.focus();
+    }
+  };
+
+  const removePendingFile = (id: string) => {
+    setPendingFiles((prev) => {
+      const removed = prev.find((f) => f.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((f) => f.id !== id);
     });
+  };
 
-    setMessage("");
+  /**
+   * Uploads files (if any) then sends the message through the hub. Shared by the composer
+   * and the camera. Resolves false if the upload failed — nothing was sent, so the caller
+   * keeps its text/files for a retry; onUploaded runs once it's safe to clear them.
+   */
+  const sendWithAttachments = async (
+    content: string,
+    files: File[],
+    options: { onProgress?: (percent: number) => void; onUploaded?: () => void } = {}
+  ): Promise<boolean> => {
     setSending(true);
 
-    // Optimistically add message to UI
+    // 1) Upload attachments first — they come back as Pending files whose ids are then
+    //    sent with the message.
+    let uploaded: MessageAttachment[] = [];
+
+    if (files.length > 0) {
+      options.onProgress?.(0);
+      try {
+        // Tiny blurred previews recipients see before choosing to download the files.
+        const previews = await Promise.all(files.map(createPreview));
+        const result = await uploadChatFiles(chatId, files, options.onProgress, previews);
+
+        // We already hold these files locally — cache them under the new file ids so the
+        // sender sees them instantly instead of downloading their own files again.
+        // (Results come back in the same order the files were sent.)
+        if (currentUser?.id) {
+          await Promise.all(result.map((f, i) => putCachedMedia(mediaKey(currentUser.id, f.id), files[i])));
+        }
+
+        uploaded = result.map((f) => ({
+          fileId: f.id,
+          fileName: f.fileName,
+          contentType: f.contentType,
+          sizeBytes: f.sizeBytes,
+          kind: f.kind,
+          isPrivate: f.isPrivate,
+          preview: f.preview,
+        }));
+      } catch (err) {
+        showToast.error(getErrorMessage(err));
+        setSending(false);
+        return false;
+      }
+    }
+
+    options.onUploaded?.();
+
+    // 2) Optimistically add the message to the UI
     const tempMessage: ChatMessage = {
       id: `temp-${Date.now()}`,
-      content: messageContent,
+      content,
       senderId: currentUser?.id || "",
       chatId: chatId,
       sentAt: new Date().toISOString(),
       timestamp: new Date().toISOString(),
       status: "sent",
+      attachments: uploaded,
     };
-    console.log('➕ Adding optimistic message to UI:', tempMessage);
     addMessage(tempMessage);
 
     try {
-      console.log('📡 Calling SignalR hub SendMessage...');
-      // Send via SignalR hub (which will save + broadcast to all clients)
-      await sendSignalRMessage(messageContent, currentUser?.id);
-      console.log(
-        '✅ Message sent successfully via SignalR hub; waiting for broadcast to update UI.'
-      );
+      // 3) Send via SignalR hub (which will save + broadcast to all clients)
+      await sendSignalRMessage(content, currentUser?.id, uploaded.map((a) => a.fileId));
     } catch (err) {
       console.error('❌ Error sending message via SignalR hub:', err);
       showToast.error(getErrorMessage(err));
-      // Remove failed message
+      // Remove failed message, and its now-orphaned uploads
       setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
+      uploaded.forEach((a) => deleteFile(a.fileId).catch(() => {}));
     } finally {
       setSending(false);
     }
+
+    return true;
+  };
+
+  const handleSendMessage = async () => {
+    if ((!message.trim() && pendingFiles.length === 0) || sending) return;
+
+    const filesToSend = pendingFiles;
+
+    await sendWithAttachments(message.trim(), filesToSend.map((f) => f.file), {
+      onProgress: setUploadProgress,
+      onUploaded: () => {
+        setMessage("");
+        filesToSend.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+        setPendingFiles([]);
+      },
+    });
+
+    setUploadProgress(null);
+  };
+
+  // A photo/video taken with the in-app camera goes straight out with its own caption,
+  // leaving whatever is in the composer untouched.
+  const handleCameraSend = (file: File, caption: string, onProgress: (percent: number) => void) =>
+    sendWithAttachments(caption, [file], { onProgress });
+
+  const openCamera = () => {
+    if (isCameraSupported()) setShowCamera(true);
+    // No camera API (old browser / insecure origin) — the native picker can still
+    // offer the camera on phones via the capture attribute.
+    else cameraInputRef.current?.click();
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     setMessage((prev) => prev + emojiData.emoji);
+    notifyTyping();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
+    if (e.key !== "Enter") return;
+    const shouldSend = preferences.sendOnEnter ? !e.shiftKey : e.ctrlKey || e.metaKey;
+    if (!shouldSend) return;
+    e.preventDefault();
+    handleSendMessage();
   };
 
   const formatTime = (timestamp?: string): string => {
     if (!timestamp) return "";
     try {
       const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const now = new Date();
+      const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      if (date.toDateString() === now.toDateString()) return time;
+
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+
+      const sameYear = date.getFullYear() === now.getFullYear();
+      const dateLabel = date.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: sameYear ? undefined : "numeric",
+      });
+      return `${dateLabel}, ${time}`;
     } catch {
       return timestamp;
     }
   };
 
   const attachmentOptions = [
-    { icon: Camera, label: "Camera", color: "text-success-500" },
-    { icon: Image, label: "Photo & Video", color: "text-[#1a7b9b] dark:text-[#60c7e3]" },
-    { icon: FileText, label: "Document", color: "text-theme-purple-500" },
+    { icon: Camera, label: "Camera", color: "text-success-500", onSelect: openCamera },
+    { icon: Image, label: "Photo & Video", color: "text-accent-600 dark:text-accent-300", onSelect: () => mediaInputRef.current?.click() },
+    { icon: FileText, label: "Document", color: "text-theme-purple-500", onSelect: () => documentInputRef.current?.click() },
   ];
 
-  // Get display name for the chat (this would ideally come from the chat context or props)
-  const chatDisplayName = "Chat"; // TODO: Get from chat context or props
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addPendingFiles(e.target.files);
+    // Reset so picking the same file again still fires onChange.
+    e.target.value = "";
+  };
 
-  const bubbleRadius = (isOwn: boolean, isFirstInGroup: boolean) => {
+  const chatDisplayName = activeChat?.name || "Chat";
+  const isGroupChat = !!activeChat?.isGroupChat;
+
+  // Group chats have no single "other user" to show a status for. For direct
+  // chats, prefer the live UserStatusChanged value; fall back to whatever the
+  // sidebar had fetched when this chat was opened.
+  const otherParticipantId = !isGroupChat ? activeChat?.participants?.[0]?.id : undefined;
+  const peerPresence = otherParticipantId ? presence[otherParticipantId] : undefined;
+  const peerStatus = peerPresence?.status ?? activeChat?.status;
+  const isPeerOnline = peerStatus === "online";
+  const peerLastSeenAt = peerPresence?.lastSeenAt ?? activeChat?.participants?.[0]?.lastSeenAt;
+  const peerStatusLabel = !isGroupChat && peerActivity
+    ? getActivityLabel(peerActivity.activityType)
+    : isPeerOnline
+      ? "Online"
+      : peerLastSeenAt
+        ? `Last seen ${formatRelativeTime(peerLastSeenAt)}`
+        : "Offline";
+
+  // Live SignalR messages only carry senderId, not a nested sender object —
+  // fall back to the participant list the sidebar already fetched.
+  const participantsById = useMemo(() => {
+    const map = new Map<string, ChatParticipant>();
+    activeChat?.participants?.forEach((p) => map.set(p.id, p));
+    return map;
+  }, [activeChat]);
+
+  const participantNames = useMemo(() => {
+    const map = new Map<string, string>();
+    participantsById.forEach((p, id) => map.set(id, p.displayName));
+    return map;
+  }, [participantsById]);
+
+  // A group has no single peer to report a status for — only surface something
+  // when someone's actually typing, and name them since there's no single "the
+  // other person" to imply it.
+  const groupActivityLabel = isGroupChat && peerActivity
+    ? getActivityLabel(peerActivity.activityType, participantNames.get(peerActivity.userId))
+    : null;
+
+  const getSenderName = (msg: ChatMessage): string =>
+    msg.sender?.displayName || participantNames.get(msg.senderId) || "Unknown";
+
+  // In a group, each message should show its own sender's picture — prefer the
+  // nested sender object a REST-fetched message carries, falling back to the
+  // participant list for live SignalR messages (which only carry a senderId). In
+  // a direct chat there's only ever one possible "other" sender — the peer
+  // already known to the chat header.
+  const getSenderAvatar = (senderId: string, sender?: { image?: string } | null): string | undefined =>
+    isGroupChat ? sender?.image || participantsById.get(senderId)?.image : activeChat?.avatar;
+
+  const bubbleRadius = (isOwn: boolean, isFirstInGroup: boolean, shape: "tailed" | "rounded") => {
+    // "rounded" drops the tail — every bubble gets the same uniform corners regardless of
+    // which side it's on or whether it starts a new run from that sender.
+    if (shape === "rounded") return "18px";
     if (isOwn) {
       return isFirstInGroup ? "18px 18px 6px 18px" : "18px 6px 6px 18px";
     }
     return isFirstInGroup ? "18px 18px 18px 6px" : "6px 18px 18px 6px";
   };
 
+  // One row per message. Day dividers and sender grouping compare with the previous
+  // message, since rows are rendered one at a time rather than per day section.
+  const renderMessage = (msg: ChatMessage, index: number, { isFirstMount }: VirtualListItemMeta) => {
+    const timestamp = messageTimestamp(msg);
+    const day = dayKey(timestamp);
+    const prev = index > 0 ? messages[index - 1] : undefined;
+    // A new day also restarts the sender grouping — same as WhatsApp, the
+    // name/avatar reappears after a day divider even mid-conversation.
+    const isFirstOfDay = !prev || dayKey(messageTimestamp(prev)) !== day;
+
+    const divider = isFirstOfDay && (
+      <div data-day-divider={day} className={`mb-4 flex justify-center ${index === 0 ? "" : "mt-2"}`}>
+        <span className={DAY_PILL_CLASS}>{formatDayDivider(timestamp)}</span>
+      </div>
+    );
+
+    if (msg.type === BackendMessageType.Alert) {
+      return (
+        <div data-message-day={day} data-timestamp={timestamp} className="px-4">
+          {divider}
+          <div className="my-3 flex justify-center">
+            <span className="max-w-[80%] rounded-full bg-gray-800/85 px-3 py-1.5 text-center text-[11px] font-medium text-gray-100 shadow-[0_1px_2px_rgba(16,24,40,.15)] dark:bg-stone-700/80 dark:text-stone-200">
+              {ensureStringContent(msg.content)}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    const isOwn = msg.senderId === currentUser?.id;
+    const isFirstInGroup = isFirstOfDay || prev!.senderId !== msg.senderId;
+    const senderAvatar = getSenderAvatar(msg.senderId, msg.sender);
+    const isCompact = preferences.messageDensity === "compact";
+
+    return (
+      <div data-message-day={day} data-timestamp={timestamp} className="px-4">
+        {divider}
+        <div className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? (isCompact ? "mt-2" : "mt-3") : (isCompact ? "mt-0.5" : "mt-1")}`}>
+          <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+            {!isOwn && (
+              <span className="mb-1">
+                <UserHoverCard
+                  userId={msg.senderId}
+                  fallbackName={getSenderName(msg)}
+                  fallbackImage={senderAvatar}
+                  presence={presence[msg.senderId]}
+                  placement="right"
+                >
+                  <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={isCompact ? 26 : 32} />
+                </UserHoverCard>
+              </span>
+            )}
+
+            <div className="group relative">
+              <div
+                style={{ borderRadius: bubbleRadius(isOwn, isFirstInGroup, preferences.bubbleShape) }}
+                // Only animate a bubble's first appearance, not every time it scrolls back into view.
+                className={`${isFirstMount ? "animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both]" : ""} ${isCompact ? "px-2.5 py-1.5" : "px-3 py-2"} transition-transform duration-200 ${EASE} hover:-translate-y-px ${
+                  isOwn
+                    ? preferences.bubbleFill === "solid"
+                      ? "bg-accent-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(var(--accent-rgb),.6)]"
+                      : "bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(var(--accent-rgb),.6)]"
+                    : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
+                }`}
+              >
+                {isGroupChat && !isOwn && isFirstInGroup && (
+                  <p className="mb-0.5 text-xs font-semibold text-accent-600 dark:text-accent-300">
+                    {getSenderName(msg)}
+                  </p>
+                )}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className={ensureStringContent(msg.content) ? "mb-1.5" : ""}>
+                    <MessageAttachments attachments={msg.attachments} isOwn={isOwn} />
+                  </div>
+                )}
+                {ensureStringContent(msg.content) && (
+                  <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
+                )}
+                <div className="mt-1 flex items-center justify-end gap-1">
+                  <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
+                    {formatTime(timestamp)}
+                  </span>
+                  {isOwn && <MessageStatus status={msg.status} />}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const dropdownItemClass =
-    "flex items-center gap-2.5 rounded-[10px] px-3 py-2 font-medium text-gray-700 text-theme-sm transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]";
+    "flex items-center gap-2.5 rounded-[10px] px-3 py-2 font-medium text-gray-700 text-theme-sm transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300";
 
   return (
     <div className="flex h-[80vh] flex-col overflow-hidden rounded-3xl border border-gray-200/70 bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_28px_60px_-46px_rgba(16,24,40,.7)] dark:border-stone-800/70 dark:bg-[#201d1b]">
@@ -266,24 +808,41 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
       <div className="relative z-20 flex items-center justify-between border-b border-gray-200/70 bg-white/75 px-4 py-3 backdrop-blur-xl backdrop-saturate-150 dark:border-stone-800/70 dark:bg-[#201d1b]/75">
         {/* Left side (user info) */}
         <div className="flex items-center">
-          <div className="relative mr-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]">
-              {chatDisplayName?.charAt(0) || "C"}
+          <UserHoverCard
+            userId={otherParticipantId || ""}
+            fallbackName={chatDisplayName}
+            fallbackImage={activeChat?.avatar}
+            presence={peerPresence}
+            disabled={isGroupChat || !otherParticipantId}
+          >
+            <div className="relative mr-3">
+              <UserAvatar
+                src={activeChat?.avatar}
+                name={chatDisplayName}
+                size={44}
+                className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(var(--accent-rgb),.65)]"
+              />
+              {!isGroupChat && isPeerOnline && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                  <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
+                  <span className="relative h-3.5 w-3.5 rounded-full border-2 border-white bg-success-500 dark:border-[#201d1b] dark:bg-success-400" />
+                </span>
+              )}
             </div>
-            {isConnected && (
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
-                <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
-                <span className="relative h-3.5 w-3.5 rounded-full border-2 border-white bg-success-500 dark:border-[#201d1b] dark:bg-success-400" />
-              </span>
-            )}
-          </div>
+          </UserHoverCard>
           <div>
             <span className="block font-semibold text-gray-800 dark:text-gray-100">
               {chatDisplayName}
             </span>
-            <span className={`text-xs ${isConnected ? "text-success-600 dark:text-success-400" : "text-gray-400 dark:text-stone-500"}`}>
-              {isConnected ? "Online" : "Connecting..."}
-            </span>
+            {isGroupChat ? (
+              groupActivityLabel && (
+                <span className="text-xs italic text-accent-600 dark:text-accent-300">{groupActivityLabel}</span>
+              )
+            ) : (
+              <span className={`text-xs ${isPeerOnline ? "text-success-600 dark:text-success-400" : "text-gray-400 dark:text-stone-500"}`}>
+                {peerStatusLabel}
+              </span>
+            )}
           </div>
         </div>
 
@@ -291,7 +850,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
         <div className="flex items-center gap-2">
           <button
             aria-label="Call"
-            className={`flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-[#1a7b9b] hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(26,123,155,.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-[#2596bb]`}
+            className={`flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-accent-600 hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(var(--accent-rgb),.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-accent-400`}
           >
             <Phone size={18} />
           </button>
@@ -300,7 +859,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           <div className="relative">
             <button
               aria-label="More options"
-              className={`dropdown-toggle flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-[#1a7b9b] hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(26,123,155,.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-[#2596bb]`}
+              className={`dropdown-toggle flex h-10 w-10 items-center justify-center rounded-[13px] border border-gray-200 text-stone-600 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:border-transparent hover:bg-accent-600 hover:text-white hover:shadow-[0_10px_18px_-10px_rgba(var(--accent-rgb),.7)] active:scale-95 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-accent-400`}
               onClick={() => setIsDropdownOpen((prev) => !prev)}
             >
               <EllipsisVertical size={18} />
@@ -311,16 +870,23 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               onClose={() => setIsDropdownOpen(false)}
               className={`flex w-[208px] origin-top-right animate-[floatIn_.18s_cubic-bezier(.2,.8,.2,1)_both] flex-col gap-0.5 rounded-2xl border border-gray-200/70 bg-white/90 p-1.5 shadow-[0_1px_2px_rgba(16,24,40,.04),0_20px_40px_-20px_rgba(16,24,40,.5)] backdrop-blur-md backdrop-saturate-150 dark:border-stone-800/70 dark:bg-stone-900/90`}
             >
-              <DropdownItem onItemClick={() => setIsDropdownOpen(false)} baseClassName={dropdownItemClass}>
-                <Info className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
-                Contact Info
+              <DropdownItem
+                onItemClick={() => {
+                  setIsDropdownOpen(false);
+                  if (isGroupChat) groupInfoModal.openModal();
+                  else contactInfoModal.openModal();
+                }}
+                baseClassName={dropdownItemClass}
+              >
+                <Info className="h-4 w-4 text-accent-600 dark:text-accent-300" />
+                {isGroupChat ? "Group Info" : "Contact Info"}
               </DropdownItem>
               <DropdownItem onItemClick={() => setIsDropdownOpen(false)} baseClassName={dropdownItemClass}>
-                <Search className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
+                <Search className="h-4 w-4 text-accent-600 dark:text-accent-300" />
                 Search Messages
               </DropdownItem>
               <DropdownItem onItemClick={() => setIsDropdownOpen(false)} baseClassName={dropdownItemClass}>
-                <XCircle className="h-4 w-4 text-[#1a7b9b] dark:text-[#60c7e3]" />
+                <XCircle className="h-4 w-4 text-accent-600 dark:text-accent-300" />
                 Clear Chat
               </DropdownItem>
               <div className="my-1 border-t border-dashed border-gray-200 dark:border-stone-700" />
@@ -338,87 +904,71 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
 
       {/* Messages area */}
       <div className="relative flex-1 overflow-hidden">
+        {preferences.chatWallpaper !== "none" && (
+          <div aria-hidden="true" className={`pointer-events-none absolute inset-0 chat-wallpaper-${preferences.chatWallpaper}`} />
+        )}
+        {/* Pinned copy of the day pill — see updatePinnedDayPill. */}
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-64"
-          style={{ background: "radial-gradient(1200px 400px at 50% -10%, rgba(26,123,155,.05), transparent 70%)" }}
-        />
-        <div
-          ref={messageListRef}
-          onScroll={handleMessageListScroll}
-          className="chat-scrollbar fade-y relative h-full overflow-y-auto p-4 dark:bg-[#1c1917]"
+          ref={dayPillRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center opacity-0 transition-opacity duration-150"
         >
-          {messages.length === 0 ? (
+          <span ref={dayPillLabelRef} className={DAY_PILL_CLASS} />
+        </div>
+
+        {messagesLoading ? (
+          <div className="flex h-full items-center justify-center dark:bg-[#1c1917]">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="h-full p-4 dark:bg-[#1c1917]">
             <div className="py-8 text-center text-sm text-gray-500 dark:text-stone-400">
               No messages yet. Start the conversation!
             </div>
-          ) : (
-            <>
-              <div className="mb-4 flex justify-center">
-                <span className="rounded-full bg-gray-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500 backdrop-blur-sm dark:bg-stone-800/70 dark:text-stone-400">
-                  Today
-                </span>
-              </div>
-
-              {messages.map((msg, index) => {
-                const isOwn = msg.senderId === currentUser?.id;
-                const isFirstInGroup = index === 0 || messages[index - 1].senderId !== msg.senderId;
-
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isOwn ? "justify-end" : "justify-start"} ${isFirstInGroup ? "mt-3" : "mt-1"}`}
-                  >
-                    <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                      {!isOwn && (
-                        <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
-                          {chatDisplayName?.charAt(0) || "U"}
-                        </div>
-                      )}
-
-                      <div className="group relative">
-                        <div
-                          style={{
-                            borderRadius: bubbleRadius(isOwn, isFirstInGroup),
-                            animationDelay: `${Math.min(index, 8) * 40}ms`,
-                          }}
-                          className={`animate-[bubbleIn_.34s_cubic-bezier(.2,.8,.2,1)_both] px-3 py-2 transition-transform duration-200 ${EASE} hover:-translate-y-px ${
-                            isOwn
-                              ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(26,123,155,.6)]"
-                              : "border border-gray-200/70 bg-white text-gray-800 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-gray-100"
-                          }`}
-                        >
-                          <p className="text-sm leading-relaxed">{ensureStringContent(msg.content)}</p>
-                          <div className="mt-1 flex items-center justify-end gap-1">
-                            <span className={`text-[11px] ${isOwn ? "text-white/75" : "text-gray-500 dark:text-stone-400"}`}>
-                              {formatTime(msg.sentAt || msg.timestamp || msg.createdAt)}
-                            </span>
-                            {isOwn && <MessageStatus status={msg.status} />}
-                          </div>
-                        </div>
+          </div>
+        ) : (
+          <VirtualList
+            key={chatId}
+            ref={messageListRef}
+            items={messages}
+            getKey={(msg) => msg.id}
+            renderItem={renderMessage}
+            startAtBottom
+            preservePositionOnPrepend
+            onLoadPrevious={loadOlderMessages}
+            hasPrevious={hasOlderMessages}
+            isLoadingPrevious={loadingOlderMessages}
+            followOutput={followNewMessages}
+            atBottomThreshold={120}
+            onAtBottomChange={handleAtBottomChange}
+            onScroll={updatePinnedDayPill}
+            header={<div className="h-4" />}
+            footer={
+              <div className="flow-root px-4 pb-4">
+                {isPeerTyping && (
+                  <div className="mt-1 flex justify-start">
+                    <div className="flex items-end gap-2">
+                      <span className="mb-1">
+                        <UserAvatar
+                          src={getSenderAvatar(peerActivity!.userId)}
+                          name={isGroupChat ? participantNames.get(peerActivity!.userId) : chatDisplayName}
+                          size={32}
+                        />
+                      </span>
+                      <div className="flex items-center gap-1 rounded-[18px_18px_18px_6px] border border-gray-200/70 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524]">
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-accent-600 dark:bg-accent-300" style={{ animationDelay: "0s" }} />
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-accent-600 dark:bg-accent-300" style={{ animationDelay: "0.16s" }} />
+                        <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-accent-600 dark:bg-accent-300" style={{ animationDelay: "0.32s" }} />
                       </div>
                     </div>
                   </div>
-                );
-              })}
-
-              {isPeerTyping && (
-                <div className="mt-1 flex justify-start">
-                  <div className="flex items-end gap-2">
-                    <div className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-400 text-xs font-semibold text-white dark:bg-stone-600">
-                      {chatDisplayName?.charAt(0) || "U"}
-                    </div>
-                    <div className="flex items-center gap-1 rounded-[18px_18px_18px_6px] border border-gray-200/70 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,.04),0_14px_26px_-18px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524]">
-                      <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0s" }} />
-                      <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.16s" }} />
-                      <span className="animate-typing-dot h-1.5 w-1.5 rounded-full bg-[#1a7b9b] dark:bg-[#60c7e3]" style={{ animationDelay: "0.32s" }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+                )}
+              </div>
+            }
+            className="chat-scrollbar fade-y dark:bg-[#1c1917]"
+            aria-label="Messages"
+          />
+        )}
 
         {!isAtBottom && unseenCount > 0 && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
@@ -426,7 +976,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               onClick={scrollToBottom}
               className={`pointer-events-auto flex animate-[floatIn_.2s_cubic-bezier(.2,.8,.2,1)_both] items-center gap-1.5 rounded-full border border-gray-200/70 bg-white/85 px-3.5 py-1.5 text-xs font-medium text-gray-700 shadow-[0_10px_24px_-12px_rgba(16,24,40,.5)] backdrop-blur-md transition-all duration-200 ${EASE} hover:-translate-y-0.5 dark:border-stone-700/70 dark:bg-stone-800/85 dark:text-gray-100`}
             >
-              <ChevronDown size={14} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+              <ChevronDown size={14} className="text-accent-600 dark:text-accent-300" />
               {unseenCount} new message{unseenCount > 1 ? "s" : ""}
             </button>
           </div>
@@ -443,7 +993,10 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                 <button
                   key={index}
                   className={`flex items-center gap-3 rounded-[10px] px-3 py-2 text-left transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-stone-700`}
-                  onClick={() => setShowAttachments(false)}
+                  onClick={() => {
+                    setShowAttachments(false);
+                    option.onSelect();
+                  }}
                 >
                   <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 ${option.color}`}>
                     <option.icon className="h-4 w-4" />
@@ -455,14 +1008,21 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
           </div>
         )}
 
+        {/* Hidden pickers behind the attachment menu options */}
+        <input ref={mediaInputRef} type="file" accept={acceptAttribute(uploadLimits, [FileKind.Image, FileKind.Video])} multiple onChange={handleFileInputChange} className="hidden" />
+        <input ref={documentInputRef} type="file" accept={acceptAttribute(uploadLimits, [FileKind.Document, FileKind.Audio])} multiple onChange={handleFileInputChange} className="hidden" />
+        <input ref={cameraInputRef} type="file" accept={acceptAttribute(uploadLimits, [FileKind.Image, FileKind.Video])} capture="environment" onChange={handleFileInputChange} className="hidden" />
+
+        <PendingAttachments files={pendingFiles} onRemove={removePendingFile} uploadProgress={uploadProgress} />
+
         {/* Chat input row */}
         <div
-          className={`flex items-center gap-1 rounded-full bg-white px-2 py-1.5 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] transition-shadow duration-200 ${EASE} focus-within:ring-4 focus-within:ring-[#1a7b9b]/10 dark:bg-[#292524] dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.35)]`}
+          className={`flex items-center gap-1 rounded-full bg-white px-2 py-1.5 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] transition-shadow duration-200 ${EASE} focus-within:ring-4 focus-within:ring-accent-600/10 dark:bg-[#292524] dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.35)]`}
         >
           <button
             onClick={() => setShowAttachments(!showAttachments)}
             aria-label="Attach file"
-            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:-rotate-12 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-400 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:-rotate-12 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-400 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -471,7 +1031,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             <button
               onClick={() => setShowEmojiPicker((prev) => !prev)}
               aria-label="Choose emoji"
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:scale-[1.12] hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-400 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+              className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:scale-[1.12] hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-400 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
             >
               <Smile className="h-5 w-5" />
             </button>
@@ -479,7 +1039,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
               <div className="absolute bottom-full left-0 z-40 mb-2">
                 <EmojiPicker
                   onEmojiClick={handleEmojiClick}
-                  theme={theme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
+                  theme={resolvedTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
                   lazyLoadEmojis
                 />
               </div>
@@ -490,34 +1050,59 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
             ref={messageInputRef}
             type="text"
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              setMessage(e.target.value);
+              notifyTyping();
+            }}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            onPaste={(e) => {
+              // Pasting a screenshot/image attaches it instead of doing nothing.
+              if (e.clipboardData.files.length > 0) {
+                e.preventDefault();
+                addPendingFiles(e.clipboardData.files);
+              }
+            }}
+            placeholder={pendingFiles.length > 0 ? "Add a caption..." : "Type a message..."}
             disabled={sending || !isConnected}
             className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-gray-800 placeholder-gray-400 outline-none disabled:opacity-50 dark:text-white dark:placeholder-stone-500"
           />
 
           <span className="mr-1 hidden shrink-0 items-center rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-400 sm:inline-flex dark:bg-white/5 dark:text-stone-500">
-            Enter ↵
+            {preferences.sendOnEnter ? "Enter ↵" : "Ctrl+Enter ↵"}
           </span>
 
           <button
             aria-label="Voice message"
-            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-400 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-all duration-200 ${EASE} hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-400 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
           >
             <Mic className="h-5 w-5" />
           </button>
 
           <button
             onClick={handleSendMessage}
-            disabled={!message.trim() || sending || !isConnected}
+            disabled={(!message.trim() && pendingFiles.length === 0) || sending || !isConnected}
             aria-label="Send message"
-            className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[0_10px_18px_-10px_rgba(26,123,155,.75)] transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[.94] disabled:pointer-events-none disabled:opacity-40`}
+            className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-white shadow-[0_10px_18px_-10px_rgba(var(--accent-rgb),.75)] transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:scale-[1.04] active:scale-[.94] disabled:pointer-events-none disabled:opacity-40`}
           >
             <Send className="h-4 w-4" />
           </button>
         </div>
       </div>
+
+      <CameraCaptureModal isOpen={showCamera} onClose={() => setShowCamera(false)} onSend={handleCameraSend} />
+
+      {isGroupChat && (
+        <GroupInfoModal isOpen={groupInfoModal.isOpen} onClose={groupInfoModal.closeModal} chatId={chatId} />
+      )}
+
+      {!isGroupChat && otherParticipantId && (
+        <ProfileViewModal
+          isOpen={contactInfoModal.isOpen}
+          onClose={contactInfoModal.closeModal}
+          userId={otherParticipantId}
+          presence={peerPresence}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,14 @@
+{
+  "projectId": "9913b556-3f6d-4247-bed9-008983857fe8",
+  "shape": "package",
+  "pkg": "chatty",
+  "globalName": "Chatty",
+  "tsconfig": "./tsconfig.json",
+  "cssEntry": ".next/static/css/7bc16706b6ceec3a.css",
+  "extraEntries": ["./.design-sync/shims/process-shim.mjs"],
+  "readmeHeader": ".design-sync/conventions.md",
+  "guidelinesGlob": ["docs/guides/**/*.md"],
+  "libOverrides": {
+    "source-kit.mjs": "synth-entry: exclude src/app/** (Next.js route files, raw Tailwind CSS import crashes the bundle) and re-export default-exported components by name"
+  }
+}

@@ -8,7 +8,7 @@ interface Props {
 }
 
 const ThemeResponsiveLogo: React.FC<Props> = ({className}) => {
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   
   return (
     <svg 
@@ -22,7 +22,7 @@ const ThemeResponsiveLogo: React.FC<Props> = ({className}) => {
         <style>
           {`
             .cls-2 {
-              fill: ${theme === "dark" ? "#FFFFFF" : "#000000"};
+              fill: ${resolvedTheme === "dark" ? "#FFFFFF" : "#000000"};
             }
           `}
         </style>

@@ -1,8 +1,12 @@
+import axios from 'axios';
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
-import { UserChat, ApiChatResponse } from '@/types/chat/chat.models';
+import { toPercent } from './file';
+import { UserChat, ApiChatResponse, ChatCreateDto, ChatSummary, UpdateChatDetailsDto, ApiEnvelope } from '@/types/chat/chat.models';
+import { OffsetPageRequest } from '@/types/pagination';
 
-export async function getUserChats(): Promise<UserChat[]> {
+// Without a page, every chat is returned (most recently active first).
+export async function getUserChats(page?: OffsetPageRequest): Promise<UserChat[]> {
   const token = getSavedToken();
   if (!token) throw new Error('No auth token found');
 
@@ -10,6 +14,7 @@ export async function getUserChats(): Promise<UserChat[]> {
     const response = await api.get<ApiChatResponse>(
       '/chat/user-chats',
       {
+        params: page,
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -37,6 +42,120 @@ export async function getUserChats(): Promise<UserChat[]> {
       throw err.response.data;
     }
     // For network errors or other issues
+    throw err;
+  }
+}
+
+// POST /api/chat — group chats only; only the caller becomes an immediate member,
+// everyone else listed gets sent a chat request. Response is the { isSuccess, data }
+// envelope wrapping the created Chat.
+export async function createChat(payload: ChatCreateDto): Promise<ChatSummary> {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  try {
+    const response = await api.post<ApiEnvelope<ChatSummary>>(
+      '/chat',
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    return response.data.data;
+  } catch (err: any) {
+    if (err.response?.data) {
+      throw err.response.data;
+    }
+    throw err;
+  }
+}
+
+// DELETE /api/chat/{chatId}/participants/{targetUserId} — admin-only.
+export async function removeParticipant(chatId: string, targetUserId: string): Promise<ChatSummary> {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  try {
+    const response = await api.delete<ApiEnvelope<ChatSummary>>(
+      `/chat/${chatId}/participants/${targetUserId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    return response.data.data;
+  } catch (err: any) {
+    if (err.response?.data) {
+      throw err.response.data;
+    }
+    throw err;
+  }
+}
+
+// POST /api/chat/{chatId}/leave — self-service; if the caller is the admin, the
+// longest-standing remaining member is auto-promoted.
+export async function leaveChat(chatId: string): Promise<ChatSummary> {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  try {
+    const response = await api.post<ApiEnvelope<ChatSummary>>(
+      `/chat/${chatId}/leave`,
+      null,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    return response.data.data;
+  } catch (err: any) {
+    if (err.response?.data) {
+      throw err.response.data;
+    }
+    throw err;
+  }
+}
+
+// PATCH /api/chat/{chatId} — admin-only; only non-null fields in details are applied.
+export async function updateChatDetails(chatId: string, details: UpdateChatDetailsDto): Promise<ChatSummary> {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  try {
+    const response = await api.patch<ApiEnvelope<ChatSummary>>(
+      `/chat/${chatId}`,
+      details,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    return response.data.data;
+  } catch (err: any) {
+    if (err.response?.data) {
+      throw err.response.data;
+    }
+    throw err;
+  }
+}
+
+// POST /api/chat/{chatId}/image — admin-only, multipart, field "file". Members are
+// notified through the usual "ChatUpdated" SignalR event.
+export async function uploadGroupImage(chatId: string, file: File, onProgress?: (percent: number) => void): Promise<ChatSummary> {
+  const token = getSavedToken();
+  if (!token) throw new Error('No auth token found');
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const response = await api.post<ApiEnvelope<ChatSummary>>(`/chat/${chatId}/image`, form, {
+      headers: { Authorization: `Bearer ${token}` },
+      onUploadProgress: (e) => onProgress?.(toPercent(e.loaded, e.total)),
+    });
+
+    return response.data.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data) {
+      throw err.response.data;
+    }
     throw err;
   }
 }

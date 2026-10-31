@@ -7,6 +7,7 @@ export default function ToastProvider() {
   return (
     <Toaster
       position="top-right"
+      containerStyle={{ zIndex: 999999 }}
       toastOptions={{
         duration: 4000,
         style: {
@@ -17,10 +18,10 @@ export default function ToastProvider() {
           fontWeight: 500,
         },
         success: {
-          style: { background: "#22c55e" },
+          style: { background: "#15803d" },
         },
         error: {
-          style: { background: "#ef4444" },
+          style: { background: "#dc2626" },
         },
         loading: {
           style: { background: "#2563eb" },

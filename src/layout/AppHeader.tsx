@@ -95,8 +95,8 @@ const AppHeader: React.FC = () => {
               ].map((item, index) => (
                 <div
                   key={index}
-                  aria-label={item.label}
-                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-stone-600 transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:-translate-y-px hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]"
+                  aria-hidden="true"
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-stone-600 transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:-translate-y-px hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300"
                 >
                   {item.icon}
                 </div>
@@ -131,18 +131,20 @@ const AppHeader: React.FC = () => {
                 { key: "calls", icon: <Phone size={20} />, label: "Calls" },
                 { key: "statuses", icon: <Activity size={20} />, label: "Statuses" },
               ].map((item) => (
-                <div
+                <button
                   key={item.key}
+                  type="button"
                   onClick={() => setActiveTab(item.key as any)}
                   aria-label={item.label}
+                  aria-pressed={activeTab === item.key}
                   className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:-translate-y-px ${
                     activeTab === item.key
-                      ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]"
-                      : "text-stone-600 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]"
+                      ? "bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(var(--accent-rgb),.65)]"
+                      : "text-stone-600 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300"
                   }`}
                 >
                   {item.icon}
-                </div>
+                </button>
               ))}
             </div>
           </div>

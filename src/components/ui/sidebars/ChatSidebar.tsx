@@ -1,16 +1,31 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import Image from "next/image";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { HubConnection } from "@microsoft/signalr";
 import { useSidebar } from "../../../context/SidebarContext";
 import { Search, Plus, MessageSquarePlus, UsersRound, Link2 } from "lucide-react";
 import { useChat } from "@/context/ChatContext";
 import { getUserChats } from "@/lib/api/chat";
-import { UserChat } from "@/types/chat/chat.models";
+import { UserChat, ChatParticipant, ParticipantRemovedDto } from "@/types/chat/chat.models";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
 import { useAppSelector } from "@/store/hooks";
+import { startSignalRConnection } from "@/lib/signalr/signalr";
+import { usePresence } from "@/hooks/usePresence";
+import { useChatActivity } from "@/hooks/useChatActivity";
+import { getActivityLabel } from "@/utils/chatActivity";
+import { formatRelativeTime } from "@/utils/time";
+import { describeAttachments } from "@/utils/file";
+import { useNow } from "@/hooks/useNow";
 import { Dropdown } from "../dropdown/Dropdown";
 import { DropdownItem } from "../dropdown/DropdownItem";
+import { useModal } from "@/hooks/useModal";
+import NewChatModal from "@/components/common/NewChatModal";
+import NewGroupModal from "@/components/common/NewGroupModal";
+import InviteLinkModal from "@/components/common/InviteLinkModal";
+import UserAvatar from "@/components/common/UserAvatar";
+import UserHoverCard from "@/components/common/UserHoverCard";
+import VirtualList, { VirtualListItemMeta } from "@/components/common/VirtualList";
 
 interface ChatUserDisplay {
   id: string;
@@ -18,11 +33,19 @@ interface ChatUserDisplay {
   avatar: string;
   status: "online" | "offline" | "away";
   lastMessage: string;
-  lastTime: string;
+  // Raw timestamp — formatted to "2m ago" etc. at render time (see resolveLastTime),
+  // so it keeps ticking forward instead of freezing at whatever it read on fetch.
+  lastTimeRaw?: string;
   unread: number;
+  isGroupChat: boolean;
+  groupImage?: string | null;
+  adminId?: string | null;
+  participants: ChatParticipant[];
 }
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
+
+const CHAT_PAGE_SIZE = 20;
 
 const ChatSidebar = () => {
   const { isExpanded, isMobileOpen, isHovered } = useSidebar();
@@ -31,31 +54,35 @@ const ChatSidebar = () => {
   const [activeTab, setActiveTab] = useState("messages");
   const [chats, setChats] = useState<ChatUserDisplay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
+  const [loadingMoreChats, setLoadingMoreChats] = useState(false);
+  // Bumped on every full (re)load so a page request still in flight from before it is
+  // dropped instead of appending to the fresh list.
+  const loadGenerationRef = useRef(0);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-  const { setActiveUserId } = useChat();
+  const { activeChat, setActiveUserId, setActiveChat, chatListVersion } = useChat();
   const currentUser = useAppSelector((state) => state.auth.user);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const newChatModal = useModal();
+  const newGroupModal = useModal();
+  const inviteLinkModal = useModal();
+  const presence = usePresence();
+  const chatActivity = useChatActivity();
+  // Ticks a re-render every 30s so "just now" / "16m ago" stay live without a refresh.
+  useNow(30000);
+
+  // Read inside the mount-once ParticipantRemoved listener below without making it re-attach.
+  const currentUserIdRef = useRef<string | undefined>(currentUser?.id);
+  const activeChatIdRef = useRef<string | undefined>(activeChat?.id);
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id;
+  }, [currentUser?.id]);
+  useEffect(() => {
+    activeChatIdRef.current = activeChat?.id;
+  }, [activeChat?.id]);
 
   const showFull = isExpanded || isHovered || isMobileOpen;
-
-  // Helper function to format time (e.g., "2m ago", "10m ago", "2d ago")
-  const formatTime = (timestamp?: string): string => {
-    if (!timestamp) return "";
-
-    try {
-      const date = new Date(timestamp);
-      const now = new Date();
-      const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-      if (diffInSeconds < 60) return "just now";
-      if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-      if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-      if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-
-      return date.toLocaleDateString();
-    } catch {
-      return timestamp;
-    }
-  };
 
   // Helper to ensure lastMessage is always a string
   const ensureStringMessage = (message: any): string => {
@@ -68,6 +95,11 @@ const ChatSidebar = () => {
     if (typeof message === 'object') {
       // If it's a message object, extract the content
       if (message.content) return String(message.content);
+      // Attachment-only message (e.g. just a photo) — describe what was sent
+      if (Array.isArray(message.attachments) && message.attachments.length > 0) {
+        return describeAttachments(message.attachments);
+      }
+      if ('content' in message) return '';
       if (message.text) return String(message.text);
       if (message.message) return String(message.message);
       // Otherwise, stringify it
@@ -76,66 +108,208 @@ const ChatSidebar = () => {
     return String(message);
   };
 
-  // Fetch user chats from API
+  // Transform a backend UserChatStateDto (REST list item or ChatStateUpdated payload)
+  // into the shape this component renders.
+  const transformChat = (chat: UserChat): ChatUserDisplay => {
+    const chatInfo = chat.chat;
+    let name: string;
+    let avatar = "";
+
+    const otherParticipant = chat.participants?.[0];
+
+    if (chatInfo?.isGroupChat) {
+      // Group chat: use group name (and image, if one was set)
+      name = chatInfo.groupName || `Group ${chatInfo.id.slice(-6)}`;
+      avatar = chatInfo.groupImage || avatar;
+    } else if (otherParticipant) {
+      // Direct chat: use the other participant's info
+      name = otherParticipant.displayName || "Unknown User";
+      avatar = otherParticipant.image || avatar;
+    } else {
+      name = "Direct Chat";
+    }
+
+    return {
+      id: chat.chatId,
+      name: name,
+      avatar: avatar,
+      // Group chats have no single "other user" to show a status for — direct
+      // chats use the fetched baseline; live updates are overlaid at render time.
+      status: !chatInfo?.isGroupChat ? otherParticipant?.status || "offline" : "offline",
+      lastMessage: ensureStringMessage(chatInfo?.lastMessage),
+      lastTimeRaw: chatInfo?.lastMessageAt && chatInfo.lastMessageAt !== "0001-01-01T00:00:00Z"
+        ? chatInfo.lastMessageAt
+        : (chatInfo?.createdAt || chat.joinedAt),
+      unread: chat.unreadMessagesCount || 0,
+      isGroupChat: !!chatInfo?.isGroupChat,
+      groupImage: chatInfo?.groupImage,
+      adminId: chatInfo?.adminId,
+      participants: chat.participants || [],
+    };
+  };
+
+  // Fetch the first page of user chats — the rest load as the list is scrolled.
   useEffect(() => {
+    const generation = ++loadGenerationRef.current;
+
     const fetchChats = async () => {
       try {
         setLoading(true);
-        const userChats = await getUserChats();
+        setLoadingMoreChats(false);
+        const userChats = await getUserChats({ top: CHAT_PAGE_SIZE, skip: 0 });
+        if (generation !== loadGenerationRef.current) return;
 
         // Ensure userChats is an array
         if (!Array.isArray(userChats)) {
           console.error("API did not return an array:", userChats);
           setChats([]);
+          setHasMoreChats(false);
           return;
         }
 
-        // Transform API response to match component's expected format
-        const transformedChats: ChatUserDisplay[] = userChats.map((chat: UserChat) => {
-          const chatInfo = chat.chat;
-          let name: string;
-          let avatar: string = "/images/user/user-01.jpg";
+        const transformed = userChats.map(transformChat);
+        setChats(transformed);
+        setHasMoreChats(userChats.length === CHAT_PAGE_SIZE);
 
-          if (chatInfo?.isGroupChat) {
-            // Group chat: use group name
-            name = chatInfo.groupName || `Group ${chatInfo.id.slice(-6)}`;
-          } else if (chat.receiver) {
-            // Direct chat: use the other participant's info
-            name = chat.receiver.displayName || "Unknown User";
-            avatar = chat.receiver.image || avatar;
-          } else {
-            name = "Direct Chat";
+        // Landed here from an invite-link accept (or any other "open this chat" deep
+        // link) — auto-select it once the list has loaded, then drop the param so a
+        // later refresh doesn't keep re-selecting it. A just-joined chat is among the
+        // most recently active, so it's in the first page.
+        const targetChatId = searchParams.get("chatId");
+        if (targetChatId) {
+          const target = transformed.find((c) => c.id === targetChatId);
+          if (target) {
+            handleUserClick(target);
           }
-
-          return {
-            id: chat.chatId,
-            name: name,
-            avatar: avatar,
-            status: chat.status || "offline",
-            lastMessage: ensureStringMessage(chatInfo?.lastMessage),
-            lastTime: chatInfo?.lastMessageAt && chatInfo.lastMessageAt !== "0001-01-01T00:00:00Z"
-              ? formatTime(chatInfo.lastMessageAt)
-              : formatTime(chatInfo?.createdAt || chat.joinedAt),
-            unread: chat.unreadMessagesCount || 0,
-          };
-        });
-
-        setChats(transformedChats);
+          router.replace("/chat");
+        }
       } catch (err) {
         console.error("Error fetching chats:", err);
         showToast.error(getErrorMessage(err));
         setChats([]); // Set empty array on error
+        setHasMoreChats(false);
       } finally {
-        setLoading(false);
+        if (generation === loadGenerationRef.current) setLoading(false);
       }
     };
 
     fetchChats();
+    // transformChat/handleUserClick/searchParams/router are stable enough here —
+    // refetch only when asked to (chatListVersion bumps after creating/accepting a
+    // chat elsewhere in the tree).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatListVersion]);
+
+  // Next page, offset by how many chats are already loaded. Live updates keep that count
+  // in step with the server: a chat moved to the top was moved there on the server too,
+  // and a chat we were removed from is gone on both sides. Duplicates are dropped anyway
+  // in case the order shifted between requests.
+  const loadMoreChats = async () => {
+    if (loadingMoreChats || !hasMoreChats) return;
+
+    const generation = loadGenerationRef.current;
+    setLoadingMoreChats(true);
+
+    try {
+      const page = await getUserChats({ top: CHAT_PAGE_SIZE, skip: chats.length });
+      if (generation !== loadGenerationRef.current) return;
+
+      setChats((prev) => {
+        const loadedIds = new Set(prev.map((c) => c.id));
+        return [...prev, ...page.map(transformChat).filter((c) => !loadedIds.has(c.id))];
+      });
+      setHasMoreChats(page.length === CHAT_PAGE_SIZE);
+    } catch (err) {
+      console.error("Error fetching more chats:", err);
+      showToast.error(getErrorMessage(err));
+    } finally {
+      if (generation === loadGenerationRef.current) setLoadingMoreChats(false);
+    }
+  };
+
+  // Live unread badges: the initial GET only reflects the moment the sidebar mounted.
+  // Every send/read after that pushes a ChatStateUpdated for this user on the shared
+  // hub connection — patch the matching row in place instead of ever refetching.
+  useEffect(() => {
+    let isMounted = true;
+    let conn: HubConnection | null = null;
+    let handleChatStateUpdated: ((dto: UserChat) => void) | null = null;
+    let handleParticipantRemoved: ((dto: ParticipantRemovedDto) => void) | null = null;
+
+    const attach = async () => {
+      try {
+        conn = await startSignalRConnection();
+        if (!isMounted) return;
+
+        handleChatStateUpdated = (dto: UserChat) => {
+          setChats((prev) => {
+            const transformed = transformChat(dto);
+            // A new message (or a read) just touched this chat — bring it to the top,
+            // same as the backend's own most-recently-active ordering, instead of
+            // patching it in place where it could stay scrolled out of view.
+            const rest = prev.filter((c) => c.id !== dto.chatId);
+            return [transformed, ...rest];
+          });
+        };
+
+        // When someone else is removed the remaining participants get a fresh
+        // ChatStateUpdated (handled above); the removed user doesn't, so drop the
+        // chat from our own list only when we were the one removed.
+        handleParticipantRemoved = (dto: ParticipantRemovedDto) => {
+          if (dto.userId !== currentUserIdRef.current) return;
+          setChats((prev) => prev.filter((c) => c.id !== dto.chatId));
+          if (activeChatIdRef.current === dto.chatId) {
+            setActiveChat(null);
+            setActiveUserId(null);
+            setSelectedUserId(null);
+          }
+        };
+
+        conn.on("ChatStateUpdated", handleChatStateUpdated);
+        conn.on("ParticipantRemoved", handleParticipantRemoved);
+      } catch (err) {
+        console.error("Failed to attach ChatStateUpdated listener:", err);
+      }
+    };
+
+    attach();
+
+    return () => {
+      isMounted = false;
+      // Only detach our own listeners — the connection is a shared singleton that
+      // ChatWindow may still be using, so it isn't ours to stop here.
+      if (conn && handleChatStateUpdated) {
+        conn.off("ChatStateUpdated", handleChatStateUpdated);
+      }
+      if (conn && handleParticipantRemoved) {
+        conn.off("ParticipantRemoved", handleParticipantRemoved);
+      }
+    };
+    // transformChat is a pure render-scoped helper (no closures over changing state);
+    // this effect intentionally attaches once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleUserClick = (userId: string) => {
-    setSelectedUserId(userId);
-    setActiveUserId(userId); // notify parent
+  // Overlays a live UserStatusChanged update (keyed by the other participant's
+  // userId) on top of the status fetched when the sidebar loaded.
+  const resolveStatus = (user: ChatUserDisplay): ChatUserDisplay["status"] => {
+    const otherId = !user.isGroupChat ? user.participants?.[0]?.id : undefined;
+    return (otherId && presence[otherId]?.status) || user.status;
+  };
+
+  const handleUserClick = (user: ChatUserDisplay) => {
+    setSelectedUserId(user.id);
+    setActiveUserId(user.id); // notify parent
+    setActiveChat({
+      id: user.id,
+      name: user.name,
+      avatar: user.avatar,
+      status: resolveStatus(user),
+      isGroupChat: user.isGroupChat,
+      groupImage: user.groupImage,
+      adminId: user.adminId,
+      participants: user.participants,
+    });
   };
 
   const filteredUsers = chats.filter(user =>
@@ -165,36 +339,53 @@ const ChatSidebar = () => {
   const statusDotClass = (status: ChatUserDisplay["status"]) =>
     status === "online" ? "bg-success-500 dark:bg-success-400" : status === "away" ? "bg-warning-400" : "bg-gray-400 dark:bg-stone-500";
 
-  const renderUserItem = (user: ChatUserDisplay, index: number) => (
-    <li key={user.id} className="mb-1.5">
+  const renderUserItem = (user: ChatUserDisplay, index: number, { isFirstMount }: VirtualListItemMeta) => {
+    const status = resolveStatus(user);
+    const rowActivity = chatActivity[user.id];
+    const lastTime = formatRelativeTime(user.lastTimeRaw);
+
+    return (
+    <div className="px-4 pb-1.5">
       <button
-        onClick={() => handleUserClick(user.id)}
-        style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}
-        className={`animate-[floatIn_.22s_cubic-bezier(.2,.8,.2,1)_both] relative flex w-full items-center rounded-2xl p-3 text-left transition-all duration-200 ${EASE} ${
+        onClick={() => handleUserClick(user)}
+        // Only animate a row's first appearance, not every time it scrolls back into view.
+        style={isFirstMount ? { animationDelay: `${Math.min(index, 6) * 40}ms` } : undefined}
+        className={`${isFirstMount ? "animate-[floatIn_.22s_cubic-bezier(.2,.8,.2,1)_both]" : ""} relative flex w-full items-center rounded-2xl p-3 text-left transition-all duration-200 ${EASE} ${
           selectedUserId === user.id
-            ? "bg-gradient-to-r from-[#1a7b9b]/[0.09] to-transparent border border-[#1a7b9b]/25 dark:from-[#2596bb]/[0.16] dark:border-[#2596bb]/30"
+            ? "bg-gradient-to-r from-accent-600/[0.09] to-transparent border border-accent-600/25 dark:from-accent-400/[0.16] dark:border-accent-400/30"
             : "border border-transparent hover:-translate-y-px hover:bg-gray-100/80 hover:shadow-[0_10px_20px_-18px_rgba(16,24,40,.6)] dark:hover:bg-white/[0.04]"
         }`}
       >
         {selectedUserId === user.id && (
-          <span className="absolute left-0 inset-y-3.5 w-[3px] rounded-r bg-[#1a7b9b] dark:bg-[#2596bb] dark:shadow-[0_0_8px_rgba(37,150,187,.6)]" />
+          <span className="absolute left-0 inset-y-3.5 w-[3px] rounded-r bg-accent-600 dark:bg-accent-400 dark:shadow-[0_0_8px_rgba(var(--accent-rgb-dark),.6)]" />
         )}
 
-        <div className="relative shrink-0">
-          <Image
-            src={user.avatar}
-            alt={user.name}
-            width={48}
-            height={48}
-            className={`rounded-full object-cover ${statusRingClass(user.status)}`}
-          />
-          <span className="absolute bottom-0 right-0 flex h-3 w-3">
-            {user.status === "online" && (
-              <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
+        <UserHoverCard
+          userId={user.participants[0]?.id || ""}
+          fallbackName={user.name}
+          fallbackImage={user.avatar}
+          presence={user.participants[0] ? presence[user.participants[0].id] : undefined}
+          disabled={user.isGroupChat || !user.participants[0]?.id}
+        >
+          <div className="relative shrink-0">
+            <UserAvatar
+              src={user.avatar}
+              name={user.name}
+              size={48}
+              className={`rounded-full ${user.isGroupChat ? "" : statusRingClass(status)}`}
+            />
+            {/* Groups have no single peer to be "online" — the presence dot only makes
+                sense for a direct chat. */}
+            {!user.isGroupChat && (
+              <span className="absolute bottom-0 right-0 flex h-3 w-3">
+                {status === "online" && (
+                  <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
+                )}
+                <span className={`relative h-3 w-3 rounded-full border-2 border-white dark:border-[#201d1b] ${statusDotClass(status)}`} />
+              </span>
             )}
-            <span className={`relative h-3 w-3 rounded-full border-2 border-white dark:border-[#201d1b] ${statusDotClass(user.status)}`} />
-          </span>
-        </div>
+          </div>
+        </UserHoverCard>
 
         {showFull && (
           <div className="ml-3 flex-1 overflow-hidden">
@@ -203,15 +394,26 @@ const ChatSidebar = () => {
                 {user.name}
               </span>
               <span className="shrink-0 text-[11px] text-gray-500 dark:text-stone-400">
-                {user.lastTime}
+                {lastTime}
               </span>
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">
-              <p className="max-w-[9rem] truncate text-xs text-gray-500 dark:text-stone-400">
-                {user.lastMessage}
+              <p
+                className={`max-w-[9rem] truncate text-xs ${
+                  rowActivity ? "italic text-accent-600 dark:text-accent-300" : "text-gray-500 dark:text-stone-400"
+                }`}
+              >
+                {rowActivity
+                  ? getActivityLabel(
+                      rowActivity.activityType,
+                      user.isGroupChat
+                        ? user.participants.find((p) => p.id === rowActivity.userId)?.displayName
+                        : undefined
+                    )
+                  : user.lastMessage}
               </p>
               {user.unread > 0 && (
-                <span className="animate-badge-glow flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1a7b9b] px-1.5 text-[11px] font-semibold text-white dark:bg-[#2596bb]">
+                <span className="animate-badge-glow flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white dark:bg-accent-400">
                   {user.unread}
                 </span>
               )}
@@ -221,13 +423,14 @@ const ChatSidebar = () => {
 
         {/* Mini badge for collapsed state */}
         {!showFull && user.unread > 0 && (
-          <span className="animate-badge-glow absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1a7b9b] px-1 text-[11px] font-semibold text-white dark:bg-[#2596bb]">
+          <span className="animate-badge-glow absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-600 px-1 text-[11px] font-semibold text-white dark:bg-accent-400">
             {user.unread}
           </span>
         )}
       </button>
-    </li>
-  );
+    </div>
+    );
+  };
 
   const renderSkeletonRow = (key: number) => (
     <li key={key} className="mb-1.5 flex items-center gap-3 p-3">
@@ -251,7 +454,7 @@ const ChatSidebar = () => {
               placeholder="Search conversations..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-xl bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:-translate-y-px focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.3)] border border-gray-200 dark:border-stone-700`}
+              className={`w-full rounded-xl bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:-translate-y-px focus:border-accent-600/55 focus:ring-4 focus:ring-accent-600/12 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.3)] border border-gray-200 dark:border-stone-700`}
             />
             <Search size={16} className="absolute left-3 top-3 text-gray-400 dark:text-stone-500" />
           </div>
@@ -263,8 +466,8 @@ const ChatSidebar = () => {
               onClick={() => setActiveTab("messages")}
               className={`flex-1 rounded-lg py-1.5 px-4 text-sm transition-all duration-200 ${EASE} active:scale-[.97] ${
                 activeTab === "messages"
-                  ? "bg-white font-medium text-[#1a7b9b] shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-[#60c7e3]"
-                  : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+                  ? "bg-white font-medium text-accent-600 shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-accent-300"
+                  : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-stone-200"
               }`}
             >
               Messages
@@ -273,8 +476,8 @@ const ChatSidebar = () => {
               onClick={() => setActiveTab("unread")}
               className={`flex-1 rounded-lg py-1.5 px-4 text-sm transition-all duration-200 ${EASE} active:scale-[.97] ${
                 activeTab === "unread"
-                  ? "bg-white font-medium text-[#1a7b9b] shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-[#60c7e3]"
-                  : "text-gray-500 hover:text-gray-700 dark:text-stone-400 dark:hover:text-stone-200"
+                  ? "bg-white font-medium text-accent-600 shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-accent-300"
+                  : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-stone-200"
               }`}
             >
               Unread
@@ -283,16 +486,16 @@ const ChatSidebar = () => {
         )}
       </div>
 
-      <div className="chat-scrollbar fade-y flex h-[calc(100vh-280px)] flex-col gap-2 overflow-y-auto px-4 pb-16 pt-3">
+      <div className="flex h-[calc(100vh-280px)] flex-col gap-2 pt-3">
         {!showFull && (
-          <div className="mb-4 flex justify-center">
-            <button className={`rounded-xl bg-gray-100 p-3 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:bg-[#1a7b9b] hover:text-white hover:shadow-[0_8px_16px_-8px_rgba(26,123,155,.6)] dark:bg-stone-800 dark:hover:bg-[#2596bb]`}>
+          <div className="mb-4 flex justify-center px-4">
+            <button className={`rounded-xl bg-gray-100 p-3 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:bg-accent-600 hover:text-white hover:shadow-[0_8px_16px_-8px_rgba(var(--accent-rgb),.6)] dark:bg-stone-800 dark:hover:bg-accent-400`}>
               <Search size={20} className="text-gray-500 dark:text-stone-400" />
             </button>
           </div>
         )}
 
-        <div className="mb-1 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between px-4">
           <h2 className="text-xs font-medium uppercase text-gray-500 dark:text-stone-400">
             {showFull ? "Recent Chats" : ""}
           </h2>
@@ -301,7 +504,7 @@ const ChatSidebar = () => {
               <button
                 onClick={() => setIsAddMenuOpen((prev) => !prev)}
                 aria-label="New chat options"
-                className={`dropdown-toggle flex h-7 w-7 items-center justify-center rounded-full text-[#1a7b9b] transition-all duration-200 ${EASE} hover:rotate-90 hover:bg-[#1a7b9b]/10 dark:text-[#60c7e3] dark:hover:bg-[#2596bb]/15`}
+                className={`dropdown-toggle flex h-7 w-7 items-center justify-center rounded-full text-accent-600 transition-all duration-200 ${EASE} hover:rotate-90 hover:bg-accent-600/10 dark:text-accent-300 dark:hover:bg-accent-400/15`}
               >
                 <Plus size={18} />
               </button>
@@ -312,24 +515,33 @@ const ChatSidebar = () => {
                 className={`w-[208px] origin-top-right animate-[floatIn_.18s_cubic-bezier(.2,.8,.2,1)_both] rounded-2xl border border-gray-200/70 bg-white/90 p-1.5 shadow-[0_1px_2px_rgba(16,24,40,.04),0_20px_40px_-20px_rgba(16,24,40,.5)] backdrop-blur-md backdrop-saturate-150 dark:border-stone-800/70 dark:bg-stone-900/90`}
               >
                 <DropdownItem
-                  onItemClick={() => setIsAddMenuOpen(false)}
-                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                  onItemClick={() => {
+                    setIsAddMenuOpen(false);
+                    newChatModal.openModal();
+                  }}
+                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
-                  <MessageSquarePlus size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+                  <MessageSquarePlus size={16} className="text-accent-600 dark:text-accent-300" />
                   New chat
                 </DropdownItem>
                 <DropdownItem
-                  onItemClick={() => setIsAddMenuOpen(false)}
-                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                  onItemClick={() => {
+                    setIsAddMenuOpen(false);
+                    newGroupModal.openModal();
+                  }}
+                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
-                  <UsersRound size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+                  <UsersRound size={16} className="text-accent-600 dark:text-accent-300" />
                   New group
                 </DropdownItem>
                 <DropdownItem
-                  onItemClick={() => setIsAddMenuOpen(false)}
-                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                  onItemClick={() => {
+                    setIsAddMenuOpen(false);
+                    inviteLinkModal.openModal();
+                  }}
+                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
-                  <Link2 size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+                  <Link2 size={16} className="text-accent-600 dark:text-accent-300" />
                   Invite via link
                 </DropdownItem>
               </Dropdown>
@@ -337,18 +549,33 @@ const ChatSidebar = () => {
           )}
         </div>
 
-        <ul className="flex flex-col pb-4">
+        <div className="min-h-0 flex-1">
           {loading ? (
-            [0, 1, 2].map(renderSkeletonRow)
+            <ul className="flex flex-col px-4">{[0, 1, 2].map(renderSkeletonRow)}</ul>
           ) : filteredUsers.length === 0 ? (
-            <li className="py-8 text-center text-sm text-gray-500 dark:text-stone-400">
+            <p className="px-4 py-8 text-center text-sm text-gray-500 dark:text-stone-400">
               No chats found
-            </li>
+            </p>
           ) : (
-            filteredUsers.map((user, index) => renderUserItem(user, index))
+            // Search only filters the chats loaded so far.
+            <VirtualList
+              items={filteredUsers}
+              getKey={(user) => user.id}
+              renderItem={renderUserItem}
+              onLoadMore={loadMoreChats}
+              hasMore={hasMoreChats}
+              isLoadingMore={loadingMoreChats}
+              footer={<div className="h-20" />}
+              className="chat-scrollbar fade-y"
+              aria-label="Recent chats"
+            />
           )}
-        </ul>
+        </div>
       </div>
+
+      <NewChatModal isOpen={newChatModal.isOpen} onClose={newChatModal.closeModal} />
+      <NewGroupModal isOpen={newGroupModal.isOpen} onClose={newGroupModal.closeModal} />
+      <InviteLinkModal isOpen={inviteLinkModal.isOpen} onClose={inviteLinkModal.closeModal} />
     </>
   );
 };

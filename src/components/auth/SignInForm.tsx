@@ -4,17 +4,20 @@ import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import { Button } from "lebify-ui";
 import { EyeCloseIcon, EyeIcon } from "@/icons";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, CircleAlert, Send } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { loginUser } from "@/store/slices/authSlice";
+import { loginUser, LoginRejection } from "@/store/slices/authSlice";
 import { unwrapResult } from "@reduxjs/toolkit";
 import { getErrorMessage } from "@/utils/error";
 import { LoginCredentials } from "@/types/auth/auth.models";
+import { resendConfirmationEmail } from "@/lib/api/auth";
 import { showToast } from "@/utils/toast";
+import { getSafeRedirect } from "@/utils/redirect";
 import Image from "next/image";
+import { emailPattern, errorInputClass } from "./shared";
 
 interface SignInFormErrors {
   userName?: string;
@@ -30,17 +33,38 @@ export default function SignInForm() {
   const [formData, setFormData] = useState({ userName: "", password: "" });
   const [errors, setErrors] = useState<SignInFormErrors>({});
 
+  // Shown when login fails with 403 (email not confirmed yet) — login only
+  // takes a username, so we ask for the email again to resend confirmation.
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendEmailError, setResendEmailError] = useState<string | undefined>();
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const { status } = useAppSelector((s) => s.auth);
 
+  // Set by lib/auth/session#endSession when the backend stopped accepting the token.
+  const session = searchParams.get("session");
+  const sessionNotice =
+    session === "revoked"
+      ? "You've been logged out of all devices. Please log in again."
+      : session === "expired"
+      ? "Your session has ended. Please log in again."
+      : null;
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    setNeedsConfirmation(false);
+    setResent(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    setNeedsConfirmation(false);
 
     const newErrors: SignInFormErrors = {};
     if (!formData.userName) newErrors.userName = "Username is required";
@@ -56,9 +80,43 @@ export default function SignInForm() {
       const result = unwrapResult(action);
       console.log("Logged in user:", result?.user);
       showToast.success("Logged in successfully!");
-      router.push("/chat");
+      router.push(getSafeRedirect(searchParams.get("redirect"), "/chat"));
+    } catch (err) {
+      const rejection = err as LoginRejection | undefined;
+      if (rejection?.statusCode === 403) {
+        setNeedsConfirmation(true);
+      } else {
+        showToast.error(getErrorMessage(err));
+      }
+    }
+  };
+
+  const submitResend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResendEmailError(undefined);
+
+    if (!resendEmail) {
+      setResendEmailError("Email is required");
+      return;
+    }
+    if (!emailPattern.test(resendEmail)) {
+      setResendEmailError("Please enter a valid email address");
+      return;
+    }
+
+    setResending(true);
+    try {
+      const res = await resendConfirmationEmail({ email: resendEmail });
+      if (!res.isSuccess) {
+        showToast.error(res.error || "Failed to resend confirmation email");
+        return;
+      }
+      setResent(true);
+      showToast.success(res.message || "A new confirmation email has been sent. Please check your inbox.");
     } catch (err) {
       showToast.error(getErrorMessage(err));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -116,17 +174,24 @@ export default function SignInForm() {
 
           <div className="mb-6 flex items-center gap-3">
             <span className="h-px flex-1" style={{ background: "linear-gradient(90deg, transparent, #e4e7ec)" }} />
-            <span className="text-[11.5px] font-medium uppercase tracking-wide text-gray-400 dark:text-stone-500">
+            <span className="text-[11.5px] font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400">
               Or
             </span>
             <span className="h-px flex-1" style={{ background: "linear-gradient(270deg, transparent, #e4e7ec)" }} />
           </div>
 
+          {sessionNotice && (
+            <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-warning-400/40 bg-warning-50 px-4 py-3.5 dark:border-warning-400/25 dark:bg-warning-400/10">
+              <CircleAlert size={16} className="mt-0.5 shrink-0 text-warning-500 dark:text-warning-400" />
+              <p className="text-sm text-gray-800 dark:text-white/90">{sessionNotice}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
 
             {/* Username */}
             <div>
-              <Label>
+              <Label htmlFor="userName">
                 Username {errors.userName && <span className="text-error-500">*</span>}
               </Label>
               <div className="relative">
@@ -146,7 +211,7 @@ export default function SignInForm() {
 
             {/* Password */}
             <div>
-              <Label>
+              <Label htmlFor="password">
                 Password {errors.password && <span className="text-error-500">*</span>}
               </Label>
               <div className="relative">
@@ -164,7 +229,8 @@ export default function SignInForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15`}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-accent-600/10 dark:hover:bg-accent-400/15`}
                 >
                   {showPassword ? (
                     <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
@@ -179,14 +245,14 @@ export default function SignInForm() {
             {/* Options */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Checkbox checked={isChecked} onChange={setIsChecked} />
-                <span className="text-sm text-gray-700 dark:text-gray-400">
+                <Checkbox id="keep-me-logged-in" checked={isChecked} onChange={setIsChecked} />
+                <label htmlFor="keep-me-logged-in" className="cursor-pointer text-sm text-gray-700 dark:text-gray-400">
                   Keep me logged in
-                </span>
+                </label>
               </div>
               <Link
-                href="/auth/reset-password"
-                className="text-sm text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]"
+                href="/auth/forgot-password"
+                className="text-sm text-accent-600 hover:text-accent-link-hover dark:text-accent-300"
               >
                 Forgot password?
               </Link>
@@ -203,17 +269,65 @@ export default function SignInForm() {
                 hideTextWhenLoading
                 icon={<ArrowRight size={18} />}
                 iconPosition="right"
-                className={`w-full rounded-2xl! bg-gradient-to-br! from-[#1f88aa] via-[#1a7b9b] to-[#17708d] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_16px_30px_-16px_rgba(26,123,155,.75)]! ${EASE} active:scale-[.985]!`}
+                className={`w-full rounded-2xl! bg-gradient-to-br! from-accent-500 via-accent-600 to-accent-700 shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_16px_30px_-16px_rgba(var(--accent-rgb),.75)]! ${EASE} active:scale-[.985]!`}
               >
                 Sign In
               </Button>
             </div>
           </form>
 
+          {needsConfirmation && (
+            <div className="mt-5 rounded-2xl border border-warning-400/40 bg-warning-50 px-4 py-3.5 dark:border-warning-400/25 dark:bg-warning-400/10">
+              <div className="flex items-start gap-2.5">
+                <CircleAlert size={16} className="mt-0.5 shrink-0 text-warning-500 dark:text-warning-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                    Please confirm your email before logging in.
+                  </p>
+
+                  {resent ? (
+                    <p className="mt-2 text-sm text-gray-600 dark:text-stone-300">
+                      A new confirmation email is on its way to{" "}
+                      <span className="font-medium">{resendEmail}</span>.
+                    </p>
+                  ) : (
+                    <form onSubmit={submitResend} className="mt-3 space-y-2.5">
+                      <Input
+                        type="text"
+                        name="resendEmail"
+                        value={resendEmail}
+                        onChange={(e) => setResendEmail(e.target.value)}
+                        placeholder="Enter the email you registered with"
+                        className={resendEmailError ? errorInputClass : undefined}
+                        error={!!resendEmailError}
+                        success={!resendEmailError}
+                      />
+                      {resendEmailError && <p className="text-error-500 text-xs">{resendEmailError}</p>}
+                      <Button
+                        type="submit"
+                        variant="sea"
+                        size="small"
+                        loading={resending}
+                        loadingPosition="right"
+                        loadingSpinner="circle"
+                        hideTextWhenLoading
+                        icon={<Send size={14} />}
+                        iconPosition="right"
+                        className={`rounded-xl! bg-gradient-to-br! from-accent-500 via-accent-600 to-accent-700 ${EASE}`}
+                      >
+                        Resend confirmation email
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="mt-5">
             <p className="text-sm text-center text-gray-700 dark:text-gray-400 sm:text-start">
               Don&apos;t have an account?{" "}
-              <Link href="signup" className="text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]">
+              <Link href="/auth/signup" className="font-medium text-accent-600 underline underline-offset-2 hover:text-accent-link-hover dark:text-accent-300">
                 Sign Up
               </Link>
             </p>

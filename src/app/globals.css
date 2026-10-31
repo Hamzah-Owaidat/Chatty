@@ -5,6 +5,8 @@
 @theme {
   --font-*: initial;
   --font-outfit: Outfit, sans-serif;
+  /* The currently-selected Appearance font — see the :root[data-font-family] blocks below. */
+  --font-active: var(--font-active-raw);
 
   --breakpoint-*: initial;
   --breakpoint-2xsm: 375px;
@@ -16,22 +18,42 @@
   --breakpoint-xl: 1280px;
   --breakpoint-2xl: 1536px;
 
-  --text-title-2xl: 72px;
-  --text-title-2xl--line-height: 90px;
-  --text-title-xl: 60px;
-  --text-title-xl--line-height: 72px;
-  --text-title-lg: 48px;
-  --text-title-lg--line-height: 60px;
-  --text-title-md: 36px;
-  --text-title-md--line-height: 44px;
-  --text-title-sm: 30px;
-  --text-title-sm--line-height: 38px;
-  --text-theme-xl: 20px;
-  --text-theme-xl--line-height: 30px;
-  --text-theme-sm: 14px;
-  --text-theme-sm--line-height: 20px;
-  --text-theme-xs: 12px;
-  --text-theme-xs--line-height: 18px;
+  /* Every size below is multiplied by --font-scale-raw (see the :root[data-font-scale]
+     blocks further down) — Small/Medium/Large in Settings scales reading/UI text without
+     touching Tailwind's separate --spacing scale (padding/gaps/radius stay fixed). */
+  --text-title-2xl: calc(72px * var(--font-scale-raw, 1));
+  --text-title-2xl--line-height: calc(90px * var(--font-scale-raw, 1));
+  --text-title-xl: calc(60px * var(--font-scale-raw, 1));
+  --text-title-xl--line-height: calc(72px * var(--font-scale-raw, 1));
+  --text-title-lg: calc(48px * var(--font-scale-raw, 1));
+  --text-title-lg--line-height: calc(60px * var(--font-scale-raw, 1));
+  --text-title-md: calc(36px * var(--font-scale-raw, 1));
+  --text-title-md--line-height: calc(44px * var(--font-scale-raw, 1));
+  --text-title-sm: calc(30px * var(--font-scale-raw, 1));
+  --text-title-sm--line-height: calc(38px * var(--font-scale-raw, 1));
+  --text-theme-xl: calc(20px * var(--font-scale-raw, 1));
+  --text-theme-xl--line-height: calc(30px * var(--font-scale-raw, 1));
+  --text-theme-sm: calc(14px * var(--font-scale-raw, 1));
+  --text-theme-sm--line-height: calc(20px * var(--font-scale-raw, 1));
+  --text-theme-xs: calc(12px * var(--font-scale-raw, 1));
+  --text-theme-xs--line-height: calc(18px * var(--font-scale-raw, 1));
+
+  /* Project override of Tailwind's own text-xs…text-3xl tokens (not otherwise redefined
+     above), so the font-scale multiplier reaches the ~210 standard-size usages app-wide. */
+  --text-xs: calc(0.75rem * var(--font-scale-raw, 1));
+  --text-xs--line-height: calc(1rem * var(--font-scale-raw, 1));
+  --text-sm: calc(0.875rem * var(--font-scale-raw, 1));
+  --text-sm--line-height: calc(1.25rem * var(--font-scale-raw, 1));
+  --text-base: calc(1rem * var(--font-scale-raw, 1));
+  --text-base--line-height: calc(1.5rem * var(--font-scale-raw, 1));
+  --text-lg: calc(1.125rem * var(--font-scale-raw, 1));
+  --text-lg--line-height: calc(1.75rem * var(--font-scale-raw, 1));
+  --text-xl: calc(1.25rem * var(--font-scale-raw, 1));
+  --text-xl--line-height: calc(1.75rem * var(--font-scale-raw, 1));
+  --text-2xl: calc(1.5rem * var(--font-scale-raw, 1));
+  --text-2xl--line-height: calc(2rem * var(--font-scale-raw, 1));
+  --text-3xl: calc(1.875rem * var(--font-scale-raw, 1));
+  --text-3xl--line-height: calc(2.25rem * var(--font-scale-raw, 1));
 
   --color-current: currentColor;
   --color-transparent: transparent;
@@ -134,6 +156,19 @@
 
   --color-theme-purple-500: #7a5af8;
 
+  /* The app's accent identity (teal by default) — swappable at runtime via
+     :root[data-accent="..."] further down, since @theme tokens are static once compiled
+     but the --accent-*-raw custom properties they reference aren't. Not named "brand" —
+     that token family already exists above (an unrelated, orphaned template leftover). */
+  --color-accent-300: var(--accent-300-raw);
+  --color-accent-400: var(--accent-400-raw);
+  --color-accent-500: var(--accent-500-raw);
+  --color-accent-600: var(--accent-600-raw);
+  --color-accent-700: var(--accent-700-raw);
+  --color-accent-hover: var(--accent-hover-raw);
+  --color-accent-hover-dark: var(--accent-hover-dark-raw);
+  --color-accent-link-hover: var(--accent-link-hover-raw);
+
   --shadow-theme-md:
     0px 4px 8px -2px rgba(16, 24, 40, 0.1),
     0px 2px 4px -2px rgba(16, 24, 40, 0.06);
@@ -167,6 +202,90 @@
   --z-index-999999: 999999;
 }
 
+/* ===== Appearance tokens (CHT-23) =====
+   Raw values the @theme tokens above reference via var(...) indirection, so they can be
+   swapped at runtime by toggling data-attributes on <html> — PreferencesContext (the
+   dark-mode-class pattern ThemeContext already uses) sets these. Each :root[data-*] block
+   only needs to redefine the handful of custom properties that actually change. */
+:root {
+  /* Accent — teal, today's exact values, so this is a zero-visual-diff default. */
+  --accent-300-raw: #60c7e3;
+  --accent-400-raw: #2596bb;
+  --accent-500-raw: #1f88aa;
+  --accent-600-raw: #1a7b9b;
+  --accent-700-raw: #17708d;
+  --accent-hover-raw: #166b87;
+  --accent-hover-dark-raw: #2085a6;
+  --accent-link-hover-raw: #15657d;
+  /* Channels-only (no rgba() wrapper) — for shadow/wash/scrollbar values that embed the
+     accent directly in an rgba(), which a Tailwind color *class* can't reach. */
+  --accent-rgb: 26 123 155;
+  --accent-rgb-dark: 37 150 187;
+  --accent-300-rgb: 96 199 227;
+  --accent-link-hover-rgb: 21 101 125;
+  --accent-scrollbar-rgb: 64 174 205;
+
+  /* Font family — "outfit" (self-hosted via next/font) is the default. */
+  --font-active-raw: var(--font-outfit);
+
+  /* Font scale multiplier — see the --text-* calc() tokens above. */
+  --font-scale-raw: 1;
+}
+
+:root[data-accent="indigo"] {
+  --accent-300-raw: #93a9f5; --accent-400-raw: #5b7ced; --accent-500-raw: #465fe0;
+  --accent-600-raw: #3b4fcc; --accent-700-raw: #2f3fb0;
+  --accent-hover-raw: #2a3aa0; --accent-hover-dark-raw: #5468e8; --accent-link-hover-raw: #25328f;
+  --accent-rgb: 59 79 204; --accent-rgb-dark: 91 124 237; --accent-scrollbar-rgb: 75 101 221;
+  --accent-300-rgb: 147 169 245; --accent-link-hover-rgb: 37 50 143;
+}
+:root[data-accent="rose"] {
+  --accent-300-raw: #f6a8c2; --accent-400-raw: #ef6f9e; --accent-500-raw: #e14f84;
+  --accent-600-raw: #cc3a6e; --accent-700-raw: #ad2d5a;
+  --accent-hover-raw: #9c2850; --accent-hover-dark-raw: #d65685; --accent-link-hover-raw: #87213f;
+  --accent-rgb: 204 58 110; --accent-rgb-dark: 239 111 158; --accent-scrollbar-rgb: 222 85 134;
+  --accent-300-rgb: 246 168 194; --accent-link-hover-rgb: 135 33 63;
+}
+:root[data-accent="amber"] {
+  --accent-300-raw: #f6c768; --accent-400-raw: #eba82e; --accent-500-raw: #d6911a;
+  --accent-600-raw: #b97711; --accent-700-raw: #97600f;
+  --accent-hover-raw: #87550d; --accent-hover-dark-raw: #c98620; --accent-link-hover-raw: #744a0f;
+  --accent-rgb: 185 119 17; --accent-rgb-dark: 235 168 46; --accent-scrollbar-rgb: 210 143 32;
+  --accent-300-rgb: 246 199 104; --accent-link-hover-rgb: 116 74 15;
+}
+:root[data-accent="forest"] {
+  --accent-300-raw: #7fcf9e; --accent-400-raw: #46ac72; --accent-500-raw: #2f9259;
+  --accent-600-raw: #237a49; --accent-700-raw: #1c633b;
+  --accent-hover-raw: #195735; --accent-hover-dark-raw: #2d8a56; --accent-link-hover-raw: #164a2c;
+  --accent-rgb: 35 122 73; --accent-rgb-dark: 70 172 114; --accent-scrollbar-rgb: 52 150 94;
+  --accent-300-rgb: 127 207 158; --accent-link-hover-rgb: 22 74 44;
+}
+
+:root[data-font-family="inter"] { --font-active-raw: 'Inter', sans-serif; }
+:root[data-font-family="poppins"] { --font-active-raw: 'Poppins', sans-serif; }
+:root[data-font-family="manrope"] { --font-active-raw: 'Manrope', sans-serif; }
+:root[data-font-family="spaceGrotesk"] { --font-active-raw: 'Space Grotesk', sans-serif; }
+:root[data-font-family="nunito"] { --font-active-raw: 'Nunito', sans-serif; }
+:root[data-font-family="plusJakarta"] { --font-active-raw: 'Plus Jakarta Sans', sans-serif; }
+:root[data-font-family="workSans"] { --font-active-raw: 'Work Sans', sans-serif; }
+:root[data-font-family="lexend"] { --font-active-raw: 'Lexend', sans-serif; }
+:root[data-font-family="quicksand"] { --font-active-raw: 'Quicksand', sans-serif; }
+
+:root[data-font-scale="small"] { --font-scale-raw: .9; }
+:root[data-font-scale="large"] { --font-scale-raw: 1.125; }
+
+/* Reduce motion — manual override, OR'd with the OS's prefers-reduced-motion at the
+   JS level (see useReducedMotion) for the few places CSS alone can't reach. */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+html[data-reduce-motion="true"] .chat-scrollbar {
+  scroll-behavior: auto !important;
+}
+
 /*
   The default border color has changed to `currentColor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
@@ -188,7 +307,7 @@
     cursor: pointer;
   }
   body {
-    @apply relative font-normal font-outfit z-1 bg-gray-50;
+    @apply relative font-normal font-active z-1 bg-gray-50;
   }
 }
 
@@ -717,12 +836,34 @@ span.flatpickr-weekday,
   @apply border-[6px] border-brand-500 bg-brand-500 dark:border-brand-500;
 }
 
+/* Chat wallpaper presets (Settings > Appearance > Chat wallpaper) — subtle, accent-tinted,
+   rendered behind the message list. "none" (default) renders nothing. */
+.chat-wallpaper-dots {
+  background-image: radial-gradient(rgba(var(--accent-rgb), 0.16) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.chat-wallpaper-diagonal {
+  background-image: repeating-linear-gradient(135deg, rgba(var(--accent-rgb), 0.05) 0 2px, transparent 2px 14px);
+}
+.chat-wallpaper-wash {
+  background: radial-gradient(1200px 400px at 50% -10%, rgba(var(--accent-rgb), 0.07), transparent 70%);
+}
+.dark .chat-wallpaper-dots {
+  background-image: radial-gradient(rgba(var(--accent-rgb-dark), 0.14) 1px, transparent 1px);
+}
+.dark .chat-wallpaper-diagonal {
+  background-image: repeating-linear-gradient(135deg, rgba(var(--accent-rgb-dark), 0.06) 0 2px, transparent 2px 14px);
+}
+.dark .chat-wallpaper-wash {
+  background: radial-gradient(1200px 400px at 50% -10%, rgba(var(--accent-rgb-dark), 0.09), transparent 70%);
+}
+
 /* Modern scroller utility — used by every scroll container in the chat UI */
 .chat-scrollbar {
   scroll-behavior: smooth;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: rgba(26, 123, 155, 0.2) transparent;
+  scrollbar-color: rgba(var(--accent-rgb), 0.2) transparent;
 }
 
 .chat-scrollbar::-webkit-scrollbar {
@@ -734,35 +875,35 @@ span.flatpickr-weekday,
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(26, 123, 155, 0.2);
+  background-color: rgba(var(--accent-rgb), 0.2);
   border: 3px solid transparent;
   background-clip: padding-box;
   border-radius: 99px;
 }
 
 .chat-scrollbar:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(26, 123, 155, 0.38);
+  background-color: rgba(var(--accent-rgb), 0.38);
   border-width: 2px;
 }
 
 .chat-scrollbar::-webkit-scrollbar-thumb:active {
-  background-color: rgba(21, 101, 125, 0.62);
+  background-color: rgba(var(--accent-link-hover-rgb), 0.62);
 }
 
 .dark .chat-scrollbar {
-  scrollbar-color: rgba(64, 174, 205, 0.26) transparent;
+  scrollbar-color: rgba(var(--accent-scrollbar-rgb), 0.26) transparent;
 }
 
 .dark .chat-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(64, 174, 205, 0.26);
+  background-color: rgba(var(--accent-scrollbar-rgb), 0.26);
 }
 
 .dark .chat-scrollbar:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(64, 174, 205, 0.5);
+  background-color: rgba(var(--accent-scrollbar-rgb), 0.5);
 }
 
 .dark .chat-scrollbar::-webkit-scrollbar-thumb:active {
-  background-color: rgba(96, 199, 227, 0.7);
+  background-color: rgba(var(--accent-300-rgb), 0.7);
 }
 
 /* Soft fade at the top/bottom edge of scrollable lists */
@@ -809,10 +950,10 @@ span.flatpickr-weekday,
 @keyframes badgeGlow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(26, 123, 155, 0.45);
+    box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.45);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(26, 123, 155, 0);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0);
   }
 }
 
