@@ -24,6 +24,7 @@ import NewChatModal from "@/components/common/NewChatModal";
 import NewGroupModal from "@/components/common/NewGroupModal";
 import InviteLinkModal from "@/components/common/InviteLinkModal";
 import UserAvatar from "@/components/common/UserAvatar";
+import UserHoverCard from "@/components/common/UserHoverCard";
 import VirtualList, { VirtualListItemMeta } from "@/components/common/VirtualList";
 
 interface ChatUserDisplay {
@@ -359,24 +360,32 @@ const ChatSidebar = () => {
           <span className="absolute left-0 inset-y-3.5 w-[3px] rounded-r bg-[#1a7b9b] dark:bg-[#2596bb] dark:shadow-[0_0_8px_rgba(37,150,187,.6)]" />
         )}
 
-        <div className="relative shrink-0">
-          <UserAvatar
-            src={user.avatar}
-            name={user.name}
-            size={48}
-            className={`rounded-full ${user.isGroupChat ? "" : statusRingClass(status)}`}
-          />
-          {/* Groups have no single peer to be "online" — the presence dot only makes
-              sense for a direct chat. */}
-          {!user.isGroupChat && (
-            <span className="absolute bottom-0 right-0 flex h-3 w-3">
-              {status === "online" && (
-                <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
-              )}
-              <span className={`relative h-3 w-3 rounded-full border-2 border-white dark:border-[#201d1b] ${statusDotClass(status)}`} />
-            </span>
-          )}
-        </div>
+        <UserHoverCard
+          userId={user.participants[0]?.id || ""}
+          fallbackName={user.name}
+          fallbackImage={user.avatar}
+          presence={user.participants[0] ? presence[user.participants[0].id] : undefined}
+          disabled={user.isGroupChat || !user.participants[0]?.id}
+        >
+          <div className="relative shrink-0">
+            <UserAvatar
+              src={user.avatar}
+              name={user.name}
+              size={48}
+              className={`rounded-full ${user.isGroupChat ? "" : statusRingClass(status)}`}
+            />
+            {/* Groups have no single peer to be "online" — the presence dot only makes
+                sense for a direct chat. */}
+            {!user.isGroupChat && (
+              <span className="absolute bottom-0 right-0 flex h-3 w-3">
+                {status === "online" && (
+                  <span className="absolute inset-0 rounded-full bg-success-500 animate-ring" />
+                )}
+                <span className={`relative h-3 w-3 rounded-full border-2 border-white dark:border-[#201d1b] ${statusDotClass(status)}`} />
+              </span>
+            )}
+          </div>
+        </UserHoverCard>
 
         {showFull && (
           <div className="ml-3 flex-1 overflow-hidden">

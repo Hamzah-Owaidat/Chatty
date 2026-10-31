@@ -49,3 +49,39 @@ export const formatDayDivider = (timestamp?: string): string => {
     year: sameYear ? undefined : "numeric",
   });
 };
+
+export interface DisplayNameCooldown {
+  canChange: boolean;
+  // Set only when canChange is false.
+  nextEligibleAt?: Date;
+  daysRemaining?: number;
+}
+
+// Display names can be changed once every rolling 30 days (not calendar month) — this
+// derives whether a change is currently allowed from the timestamp of the last change.
+export const getDisplayNameCooldown = (displayNameUpdatedAt?: string): DisplayNameCooldown => {
+  if (!displayNameUpdatedAt) return { canChange: true };
+
+  const updatedAt = new Date(displayNameUpdatedAt);
+  if (isNaN(updatedAt.getTime())) return { canChange: true };
+
+  const nextEligibleAt = new Date(updatedAt);
+  nextEligibleAt.setDate(nextEligibleAt.getDate() + 30);
+
+  const now = new Date();
+  if (now >= nextEligibleAt) return { canChange: true };
+
+  return {
+    canChange: false,
+    nextEligibleAt,
+    daysRemaining: Math.max(1, Math.ceil((nextEligibleAt.getTime() - now.getTime()) / 86400000)),
+  };
+};
+
+// Shared "Online" / "Last seen X ago" / "Offline" label for read-only profile views
+// (Contact Info modal, avatar hover-card).
+export const getPresenceLabel = (status?: "online" | "offline", lastSeenAt?: string): string => {
+  if (status === "online") return "Online";
+  if (lastSeenAt) return `Last seen ${formatRelativeTime(lastSeenAt)}`;
+  return "Offline";
+};

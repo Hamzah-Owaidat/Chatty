@@ -12,6 +12,8 @@ import { useAppSelector } from "@/store/hooks";
 import { useChat } from "@/context/ChatContext";
 import AvatarUpload from "./AvatarUpload";
 import UserAvatar from "@/components/common/UserAvatar";
+import UserHoverCard from "@/components/common/UserHoverCard";
+import { usePresence } from "@/hooks/usePresence";
 
 interface GroupInfoModalProps {
   isOpen: boolean;
@@ -24,6 +26,7 @@ const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoModalProps) {
   const { activeChat, setActiveChat, setActiveUserId, refreshChatList } = useChat();
   const currentUser = useAppSelector((state) => state.auth.user);
+  const presence = usePresence();
 
   const [groupName, setGroupName] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
@@ -224,7 +227,9 @@ export default function GroupInfoModal({ isOpen, onClose, chatId }: GroupInfoMod
 
           return (
             <li key={member.id} className="flex items-center gap-3 rounded-xl p-2">
-              <UserAvatar src={member.image} name={member.displayName} size={36} />
+              <UserHoverCard userId={member.id} fallbackName={member.displayName} fallbackImage={member.image} presence={presence[member.id]}>
+                <UserAvatar src={member.image} name={member.displayName} size={36} />
+              </UserHoverCard>
               <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">
                 {member.displayName} {isSelf && <span className="text-gray-400 dark:text-stone-500">(you)</span>}
               </span>
