@@ -152,7 +152,7 @@ export default function SignUpForm() {
     return (
       <div className="flex w-full flex-col lg:w-[58%]">
         <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center">
-          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#1a7b9b]/25 bg-[#1a7b9b]/10 text-[#1a7b9b] dark:border-[#2596bb]/30 dark:bg-[#2596bb]/15 dark:text-[#60c7e3]">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-accent-600/25 bg-accent-600/10 text-accent-600 dark:border-accent-400/30 dark:bg-accent-400/15 dark:text-accent-300">
             <MailCheck size={22} />
           </div>
           <h1 className="mb-2 text-[30px] font-semibold -tracking-[.02em] text-gray-800 dark:text-white/90">
@@ -190,7 +190,7 @@ export default function SignUpForm() {
               Already confirmed?{" "}
               <Link
                 href={signInHref}
-                className="font-medium text-[#1a7b9b] underline underline-offset-2 hover:text-[#15657d] dark:text-[#60c7e3]"
+                className="font-medium text-accent-600 underline underline-offset-2 hover:text-accent-link-hover dark:text-accent-300"
               >
                 Sign In
               </Link>
@@ -343,7 +343,7 @@ export default function SignUpForm() {
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? "Hide password" : "Show password"}
-                      className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15`}
+                      className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-accent-600/10 dark:hover:bg-accent-400/15`}
                     >
                       {showPassword ? (
                         <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
@@ -401,7 +401,7 @@ export default function SignUpForm() {
                     hideTextWhenLoading
                     icon={<ArrowRight size={18} />}
                     iconPosition="right"
-                    className={`flex w-full items-center justify-center rounded-2xl! bg-gradient-to-br! from-[#1f88aa] via-[#1a7b9b] to-[#17708d] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_16px_30px_-16px_rgba(26,123,155,.75)]! ${EASE} active:scale-[.985]!`}
+                    className={`flex w-full items-center justify-center rounded-2xl! bg-gradient-to-br! from-accent-500 via-accent-600 to-accent-700 shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_16px_30px_-16px_rgba(var(--accent-rgb),.75)]! ${EASE} active:scale-[.985]!`}
                   >
                     Create account
                   </Button>
@@ -414,7 +414,7 @@ export default function SignUpForm() {
                 Already have an account?{" "}
                 <Link
                   href={signInHref}
-                  className="font-medium text-[#1a7b9b] underline underline-offset-2 hover:text-[#15657d] dark:text-[#60c7e3]"
+                  className="font-medium text-accent-600 underline underline-offset-2 hover:text-accent-link-hover dark:text-accent-300"
                 >
                   Sign In
                 </Link>

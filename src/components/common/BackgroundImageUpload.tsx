@@ -69,7 +69,7 @@ export default function BackgroundImageUpload({ imageUrl, onUpload, disabled = f
         // eslint-disable-next-line @next/next/no-img-element -- remote CDN or local object URL
         <img src={shownImage} alt="" className="h-full w-full object-cover" />
       ) : (
-        <div className="h-full w-full bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d]" />
+        <div className="h-full w-full bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700" />
       )}
 
       {uploading && (
@@ -85,7 +85,7 @@ export default function BackgroundImageUpload({ imageUrl, onUpload, disabled = f
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
           aria-label="Change background image"
-          className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#1a7b9b] text-white shadow-md transition-transform duration-200 hover:scale-110 disabled:opacity-60 dark:border-stone-900 dark:bg-[#2596bb]"
+          className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-accent-600 text-white shadow-md transition-transform duration-200 hover:scale-110 disabled:opacity-60 dark:border-stone-900 dark:bg-accent-400"
         >
           <Camera className="h-4 w-4" />
         </button>

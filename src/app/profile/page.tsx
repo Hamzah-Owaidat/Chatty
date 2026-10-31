@@ -161,7 +161,7 @@ export default function ProfilePage() {
             <div className="mx-auto max-w-2xl">
                 <Link
                     href="/chat"
-                    className={`mb-6 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors duration-200 ${EASE} hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                    className={`mb-6 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors duration-200 ${EASE} hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
                     <ArrowLeft size={16} />
                     Back to chats
@@ -250,7 +250,7 @@ export default function ProfilePage() {
                                                     type="button"
                                                     onClick={() => setShowEmojiPicker((prev) => !prev)}
                                                     aria-label="Choose emoji"
-                                                    className={`flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-all duration-200 ${EASE} hover:scale-110 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-500 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                                                    className={`flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-all duration-200 ${EASE} hover:scale-110 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-500 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                                                 >
                                                     <Smile className="h-4 w-4" />
                                                 </button>

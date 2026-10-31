@@ -5,6 +5,7 @@ import { ArrowDown, Download, FileText, Image as ImageIcon, Music, RotateCcw, Vi
 import { FileKind, MessageAttachment } from "@/types/file.models";
 import { CachedMediaStatus, useCachedMedia } from "@/hooks/useCachedMedia";
 import { formatFileSize } from "@/utils/file";
+import { usePreferences } from "@/context/PreferencesContext";
 
 interface MessageAttachmentsProps {
   attachments: MessageAttachment[];
@@ -12,10 +13,11 @@ interface MessageAttachmentsProps {
 }
 
 /**
- * Renders a message's files inside its bubble. Nothing is loaded automatically — like
- * WhatsApp, the user taps to download, the file comes through the API (which re-checks
- * chat membership), is kept in the browser's local media cache, and from then on it's
- * shown from there.
+ * Renders a message's files inside its bubble. By default nothing is loaded automatically
+ * — like WhatsApp, the user taps to download, the file comes through the API (which
+ * re-checks chat membership), is kept in the browser's local media cache, and from then on
+ * it's shown from there. Images/videos auto-download instead when the user has turned that
+ * on in Settings; audio and documents always stay tap-to-download regardless.
  */
 export default function MessageAttachments({ attachments, isOwn }: MessageAttachmentsProps) {
   const media = attachments.filter((a) => a.kind === FileKind.Image || a.kind === FileKind.Video);
@@ -44,7 +46,10 @@ export default function MessageAttachments({ attachments, isOwn }: MessageAttach
 }
 
 function MediaTile({ file, compact }: { file: MessageAttachment; compact: boolean }) {
-  const { status, progress, objectUrl, download, cancel } = useCachedMedia(file.fileId, file.sizeBytes);
+  const { preferences } = usePreferences();
+  const { status, progress, objectUrl, download, cancel } = useCachedMedia(file.fileId, file.sizeBytes, {
+    autoDownload: preferences.autoDownloadMedia,
+  });
   const [viewerOpen, setViewerOpen] = useState(false);
   const isVideo = file.kind === FileKind.Video;
   const box = `relative overflow-hidden rounded-xl ${compact ? "aspect-square" : "h-44"}`;
@@ -144,7 +149,7 @@ function DownloadControl({
 }) {
   const radius = size / 2 - 3;
   const circumference = 2 * Math.PI * radius;
-  const surface = dark ? "bg-[#1a7b9b] text-white" : "bg-black/45 text-white backdrop-blur-sm";
+  const surface = dark ? "bg-accent-600 text-white" : "bg-black/45 text-white backdrop-blur-sm";
 
   if (status === "downloading") {
     return (

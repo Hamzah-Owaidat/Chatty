@@ -28,7 +28,7 @@ export default function UserAvatar({ src, name, size = 40, className = "rounded-
 
   return (
     <span
-      className={`flex shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] font-semibold text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 font-semibold text-white ${className}`}
       style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.4)) }}
     >
       {showImage ? (

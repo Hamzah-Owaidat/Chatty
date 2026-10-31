@@ -100,6 +100,42 @@ export async function putCachedMedia(key: string, blob: Blob): Promise<void> {
   }
 }
 
+/** Total number of cached files and their combined size, for the Settings "Storage" section. */
+export async function getCacheStats(): Promise<{ count: number; totalBytes: number }> {
+  if (!isSupported()) return { count: 0, totalBytes: 0 };
+
+  try {
+    const db = await openDb();
+    const store = db.transaction(STORE, 'readonly').objectStore(STORE);
+
+    return await new Promise((resolve, reject) => {
+      let count = 0;
+      let totalBytes = 0;
+      const request = store.openCursor();
+
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return resolve({ count, totalBytes });
+        count++;
+        totalBytes += (cursor.value as CachedMediaEntry).blob.size;
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } catch (err) {
+    console.warn('Could not read media cache stats:', err);
+    return { count: 0, totalBytes: 0 };
+  }
+}
+
+/** Wipes every cached file (Settings "Clear cache"). Files simply re-download on next view. */
+export async function clearAllCachedMedia(): Promise<void> {
+  if (!isSupported()) return;
+
+  const db = await openDb();
+  await asPromise(db.transaction(STORE, 'readwrite').objectStore(STORE).clear());
+}
+
 /** Deletes every entry not viewed within the TTL. */
 export async function pruneExpiredMedia(): Promise<void> {
   if (!isSupported()) return;

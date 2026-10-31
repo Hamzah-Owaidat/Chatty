@@ -190,7 +190,7 @@ export default function ConfirmEmailForm() {
         )}
 
         <p className="mt-5 text-sm text-center text-gray-700 dark:text-gray-400">
-          <Link href="/auth/signin" className="font-medium text-[#1a7b9b] underline underline-offset-2 hover:text-[#15657d] dark:text-[#60c7e3]">
+          <Link href="/auth/signin" className="font-medium text-accent-600 underline underline-offset-2 hover:text-accent-link-hover dark:text-accent-300">
             Back to sign in
           </Link>
         </p>

@@ -352,12 +352,12 @@ const ChatSidebar = () => {
         style={isFirstMount ? { animationDelay: `${Math.min(index, 6) * 40}ms` } : undefined}
         className={`${isFirstMount ? "animate-[floatIn_.22s_cubic-bezier(.2,.8,.2,1)_both]" : ""} relative flex w-full items-center rounded-2xl p-3 text-left transition-all duration-200 ${EASE} ${
           selectedUserId === user.id
-            ? "bg-gradient-to-r from-[#1a7b9b]/[0.09] to-transparent border border-[#1a7b9b]/25 dark:from-[#2596bb]/[0.16] dark:border-[#2596bb]/30"
+            ? "bg-gradient-to-r from-accent-600/[0.09] to-transparent border border-accent-600/25 dark:from-accent-400/[0.16] dark:border-accent-400/30"
             : "border border-transparent hover:-translate-y-px hover:bg-gray-100/80 hover:shadow-[0_10px_20px_-18px_rgba(16,24,40,.6)] dark:hover:bg-white/[0.04]"
         }`}
       >
         {selectedUserId === user.id && (
-          <span className="absolute left-0 inset-y-3.5 w-[3px] rounded-r bg-[#1a7b9b] dark:bg-[#2596bb] dark:shadow-[0_0_8px_rgba(37,150,187,.6)]" />
+          <span className="absolute left-0 inset-y-3.5 w-[3px] rounded-r bg-accent-600 dark:bg-accent-400 dark:shadow-[0_0_8px_rgba(var(--accent-rgb-dark),.6)]" />
         )}
 
         <UserHoverCard
@@ -400,7 +400,7 @@ const ChatSidebar = () => {
             <div className="mt-1 flex items-center justify-between gap-2">
               <p
                 className={`max-w-[9rem] truncate text-xs ${
-                  rowActivity ? "italic text-[#1a7b9b] dark:text-[#60c7e3]" : "text-gray-500 dark:text-stone-400"
+                  rowActivity ? "italic text-accent-600 dark:text-accent-300" : "text-gray-500 dark:text-stone-400"
                 }`}
               >
                 {rowActivity
@@ -413,7 +413,7 @@ const ChatSidebar = () => {
                   : user.lastMessage}
               </p>
               {user.unread > 0 && (
-                <span className="animate-badge-glow flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1a7b9b] px-1.5 text-[11px] font-semibold text-white dark:bg-[#2596bb]">
+                <span className="animate-badge-glow flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-600 px-1.5 text-[11px] font-semibold text-white dark:bg-accent-400">
                   {user.unread}
                 </span>
               )}
@@ -423,7 +423,7 @@ const ChatSidebar = () => {
 
         {/* Mini badge for collapsed state */}
         {!showFull && user.unread > 0 && (
-          <span className="animate-badge-glow absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1a7b9b] px-1 text-[11px] font-semibold text-white dark:bg-[#2596bb]">
+          <span className="animate-badge-glow absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-600 px-1 text-[11px] font-semibold text-white dark:bg-accent-400">
             {user.unread}
           </span>
         )}
@@ -454,7 +454,7 @@ const ChatSidebar = () => {
               placeholder="Search conversations..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-xl bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:-translate-y-px focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.3)] border border-gray-200 dark:border-stone-700`}
+              className={`w-full rounded-xl bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 shadow-[inset_0_1px_2px_rgba(16,24,40,.06)] outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:-translate-y-px focus:border-accent-600/55 focus:ring-4 focus:ring-accent-600/12 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500 dark:shadow-[inset_0_1px_2px_rgba(0,0,0,.3)] border border-gray-200 dark:border-stone-700`}
             />
             <Search size={16} className="absolute left-3 top-3 text-gray-400 dark:text-stone-500" />
           </div>
@@ -466,7 +466,7 @@ const ChatSidebar = () => {
               onClick={() => setActiveTab("messages")}
               className={`flex-1 rounded-lg py-1.5 px-4 text-sm transition-all duration-200 ${EASE} active:scale-[.97] ${
                 activeTab === "messages"
-                  ? "bg-white font-medium text-[#1a7b9b] shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-[#60c7e3]"
+                  ? "bg-white font-medium text-accent-600 shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-accent-300"
                   : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-stone-200"
               }`}
             >
@@ -476,7 +476,7 @@ const ChatSidebar = () => {
               onClick={() => setActiveTab("unread")}
               className={`flex-1 rounded-lg py-1.5 px-4 text-sm transition-all duration-200 ${EASE} active:scale-[.97] ${
                 activeTab === "unread"
-                  ? "bg-white font-medium text-[#1a7b9b] shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-[#60c7e3]"
+                  ? "bg-white font-medium text-accent-600 shadow-[0_2px_6px_rgba(16,24,40,.12)] dark:bg-stone-700 dark:text-accent-300"
                   : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-stone-200"
               }`}
             >
@@ -489,7 +489,7 @@ const ChatSidebar = () => {
       <div className="flex h-[calc(100vh-280px)] flex-col gap-2 pt-3">
         {!showFull && (
           <div className="mb-4 flex justify-center px-4">
-            <button className={`rounded-xl bg-gray-100 p-3 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:bg-[#1a7b9b] hover:text-white hover:shadow-[0_8px_16px_-8px_rgba(26,123,155,.6)] dark:bg-stone-800 dark:hover:bg-[#2596bb]`}>
+            <button className={`rounded-xl bg-gray-100 p-3 transition-all duration-200 ${EASE} hover:-translate-y-0.5 hover:bg-accent-600 hover:text-white hover:shadow-[0_8px_16px_-8px_rgba(var(--accent-rgb),.6)] dark:bg-stone-800 dark:hover:bg-accent-400`}>
               <Search size={20} className="text-gray-500 dark:text-stone-400" />
             </button>
           </div>
@@ -504,7 +504,7 @@ const ChatSidebar = () => {
               <button
                 onClick={() => setIsAddMenuOpen((prev) => !prev)}
                 aria-label="New chat options"
-                className={`dropdown-toggle flex h-7 w-7 items-center justify-center rounded-full text-[#1a7b9b] transition-all duration-200 ${EASE} hover:rotate-90 hover:bg-[#1a7b9b]/10 dark:text-[#60c7e3] dark:hover:bg-[#2596bb]/15`}
+                className={`dropdown-toggle flex h-7 w-7 items-center justify-center rounded-full text-accent-600 transition-all duration-200 ${EASE} hover:rotate-90 hover:bg-accent-600/10 dark:text-accent-300 dark:hover:bg-accent-400/15`}
               >
                 <Plus size={18} />
               </button>
@@ -519,9 +519,9 @@ const ChatSidebar = () => {
                     setIsAddMenuOpen(false);
                     newChatModal.openModal();
                   }}
-                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
-                  <MessageSquarePlus size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+                  <MessageSquarePlus size={16} className="text-accent-600 dark:text-accent-300" />
                   New chat
                 </DropdownItem>
                 <DropdownItem
@@ -529,9 +529,9 @@ const ChatSidebar = () => {
                     setIsAddMenuOpen(false);
                     newGroupModal.openModal();
                   }}
-                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
-                  <UsersRound size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+                  <UsersRound size={16} className="text-accent-600 dark:text-accent-300" />
                   New group
                 </DropdownItem>
                 <DropdownItem
@@ -539,9 +539,9 @@ const ChatSidebar = () => {
                     setIsAddMenuOpen(false);
                     inviteLinkModal.openModal();
                   }}
-                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                  baseClassName={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-theme-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
-                  <Link2 size={16} className="text-[#1a7b9b] dark:text-[#60c7e3]" />
+                  <Link2 size={16} className="text-accent-600 dark:text-accent-300" />
                   Invite via link
                 </DropdownItem>
               </Dropdown>

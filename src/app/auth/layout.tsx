@@ -26,7 +26,7 @@ export default function AuthLayout({
                 className="pointer-events-none absolute inset-0 z-0"
                 style={{
                   background:
-                    "radial-gradient(500px 320px at 50% 38%, rgba(26,123,155,.1), transparent 70%)",
+                    "radial-gradient(500px 320px at 50% 38%, rgba(var(--accent-rgb),.1), transparent 70%)",
                 }}
               />
 
@@ -54,7 +54,7 @@ export default function AuthLayout({
                       />
                     </span>
                   ))}
-                  <span className="-ml-2.5 flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[#1a7b9b] text-[11px] font-semibold text-white ring-[3px] ring-gray-100 dark:bg-[#2596bb] dark:ring-stone-900">
+                  <span className="-ml-2.5 flex h-[38px] w-[38px] items-center justify-center rounded-full bg-accent-600 text-[11px] font-semibold text-white ring-[3px] ring-gray-100 dark:bg-accent-400 dark:ring-stone-900">
                     +9
                   </span>
                 </div>
