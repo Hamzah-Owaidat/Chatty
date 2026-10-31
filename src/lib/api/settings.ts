@@ -129,3 +129,13 @@ export async function updateReadReceipts(enabled: boolean): Promise<boolean> {
     rethrowApiError(err);
   }
 }
+
+// POST /api/user/me/sessions/revokeall — invalidates every token for the account,
+// including the one making this call, so the caller has to sign in again too.
+export async function revokeAllSessions(): Promise<void> {
+  try {
+    await api.post('/user/me/sessions/revokeall', null, { headers: authHeaders() });
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}

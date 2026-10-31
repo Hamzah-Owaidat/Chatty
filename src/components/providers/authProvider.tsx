@@ -2,6 +2,10 @@
 import { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { initializeAuth } from '@/store/slices/authSlice';
+import { installSessionGuard } from '@/lib/auth/session';
+
+// Before any request goes out, so a rejected token on the very first /user/me is handled too.
+installSessionGuard();
 
 interface AuthProviderProps {
   children: React.ReactNode;

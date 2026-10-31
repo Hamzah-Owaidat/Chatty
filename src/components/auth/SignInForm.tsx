@@ -46,6 +46,15 @@ export default function SignInForm() {
   const dispatch = useAppDispatch();
   const { status } = useAppSelector((s) => s.auth);
 
+  // Set by lib/auth/session#endSession when the backend stopped accepting the token.
+  const session = searchParams.get("session");
+  const sessionNotice =
+    session === "revoked"
+      ? "You've been logged out of all devices. Please log in again."
+      : session === "expired"
+      ? "Your session has ended. Please log in again."
+      : null;
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setNeedsConfirmation(false);
@@ -170,6 +179,13 @@ export default function SignInForm() {
             </span>
             <span className="h-px flex-1" style={{ background: "linear-gradient(270deg, transparent, #e4e7ec)" }} />
           </div>
+
+          {sessionNotice && (
+            <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-warning-400/40 bg-warning-50 px-4 py-3.5 dark:border-warning-400/25 dark:bg-warning-400/10">
+              <CircleAlert size={16} className="mt-0.5 shrink-0 text-warning-500 dark:text-warning-400" />
+              <p className="text-sm text-gray-800 dark:text-white/90">{sessionNotice}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
 

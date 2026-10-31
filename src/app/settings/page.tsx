@@ -7,7 +7,6 @@ import {
     Eye,
     HardDrive,
     Lock,
-    LogOut,
     LucideIcon,
     MessageSquare,
     Palette,
@@ -30,6 +29,7 @@ import ChangeEmailSetting from "@/components/settings/ChangeEmailSetting";
 import LastSeenSetting from "@/components/settings/LastSeenSetting";
 import NotificationSettings from "@/components/settings/NotificationSettings";
 import ReadReceiptsSetting from "@/components/settings/ReadReceiptsSetting";
+import LogOutAllDevicesSetting from "@/components/settings/LogOutAllDevicesSetting";
 
 type SectionId = "appearance" | "chat" | "storage" | "security" | "privacy" | "notifications" | "danger";
 
@@ -321,7 +321,7 @@ export default function SettingsPage() {
 
                             {activeSection === "danger" && (
                                 <div className="space-y-2">
-                                    <DangerRow icon={LogOut} label="Log out of all devices" />
+                                    <LogOutAllDevicesSetting />
                                     <DangerRow icon={Trash2} label="Delete account" />
                                 </div>
                             )}
