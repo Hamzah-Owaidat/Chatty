@@ -13,6 +13,7 @@ export interface User {
   // login/notification address until the link sent here is clicked.
   pendingEmail?: string | null;
   notificationPreferences?: NotificationPreferences;
+  lastSeenVisibility?: LastSeenVisibility;
   // add other fields as needed
 }
 
@@ -36,4 +37,13 @@ export interface NotificationPreferences {
   notifyOnMessage: boolean;
   notifyOnChatRequest: boolean;
   notifyOnGroupInvite: boolean;
+}
+
+// Who can see your online status and last seen. "contacts" = the hand-picked list below,
+// not everyone you chat with.
+export type LastSeenVisibility = 'everyone' | 'contacts' | 'nobody';
+
+export interface LastSeenPrivacy {
+  value: LastSeenVisibility;
+  contacts: { id: string; displayName: string; image?: string }[];
 }

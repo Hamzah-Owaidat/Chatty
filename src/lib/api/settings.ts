@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
 import { ApiEnvelope } from '@/types/chat/chat.models';
-import { NotificationPreferences, User } from '@/types/user';
+import { LastSeenPrivacy, LastSeenVisibility, NotificationPreferences, User } from '@/types/user';
 
 // Account settings endpoints (CHT-21). Same envelope/error convention as lib/api/user.ts:
 // resolves with `data` on success, throws the backend's { isSuccess, error } body otherwise.
@@ -56,6 +56,58 @@ export async function updateNotificationPreferences(
 ): Promise<NotificationPreferences> {
   try {
     const response = await api.patch<ApiEnvelope<NotificationPreferences>>('/user/me/notifications', changes, {
+      headers: authHeaders(),
+    });
+    return response.data.data;
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
+
+// GET /api/user/me/privacy/lastseen — the setting plus the hand-picked contacts list.
+export async function getLastSeenPrivacy(): Promise<LastSeenPrivacy> {
+  try {
+    const response = await api.get<ApiEnvelope<LastSeenPrivacy>>('/user/me/privacy/lastseen', {
+      headers: authHeaders(),
+    });
+    return response.data.data;
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
+
+// PATCH /api/user/me/privacy/lastseen — { value }.
+export async function updateLastSeenVisibility(value: LastSeenVisibility): Promise<LastSeenPrivacy> {
+  try {
+    const response = await api.patch<ApiEnvelope<LastSeenPrivacy>>(
+      '/user/me/privacy/lastseen',
+      { value },
+      { headers: authHeaders() }
+    );
+    return response.data.data;
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
+
+// POST /api/user/me/privacy/lastseen/contacts/{userId} — adding someone already listed is a no-op.
+export async function addLastSeenContact(userId: string): Promise<LastSeenPrivacy> {
+  try {
+    const response = await api.post<ApiEnvelope<LastSeenPrivacy>>(
+      `/user/me/privacy/lastseen/contacts/${userId}`,
+      null,
+      { headers: authHeaders() }
+    );
+    return response.data.data;
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
+
+// DELETE /api/user/me/privacy/lastseen/contacts/{userId}
+export async function removeLastSeenContact(userId: string): Promise<LastSeenPrivacy> {
+  try {
+    const response = await api.delete<ApiEnvelope<LastSeenPrivacy>>(`/user/me/privacy/lastseen/contacts/${userId}`, {
       headers: authHeaders(),
     });
     return response.data.data;
