@@ -21,10 +21,10 @@ const disabledFieldClass =
     "w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-500 outline-none dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-400 cursor-not-allowed";
 
 const activeFieldClass =
-    `w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-accent-600/55 focus:ring-4 focus:ring-accent-600/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`;
+    `w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`;
 
 const activeTextareaClass =
-    `w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-accent-600/55 focus:ring-4 focus:ring-accent-600/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`;
+    `w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 ${EASE} placeholder-gray-400 focus:border-[#1a7b9b]/55 focus:ring-4 focus:ring-[#1a7b9b]/12 dark:border-stone-700 dark:bg-stone-800 dark:text-white dark:placeholder-stone-500`;
 
 export default function ProfilePage() {
     const dispatch = useAppDispatch();
@@ -32,7 +32,7 @@ export default function ProfilePage() {
     const token = useAppSelector((state) => state.auth.token);
     const status = useAppSelector((state) => state.auth.status);
     const initialized = useAppSelector((state) => state.auth.initialized);
-    const { resolvedTheme } = useTheme();
+    const { theme } = useTheme();
 
     const [displayNameDraft, setDisplayNameDraft] = useState(user?.displayName || "");
     const [bioDraft, setBioDraft] = useState(user?.bio || "");
@@ -258,7 +258,7 @@ export default function ProfilePage() {
                                                     <div className="absolute right-0 top-full z-40 mt-2">
                                                         <EmojiPicker
                                                             onEmojiClick={handleEmojiClick}
-                                                            theme={resolvedTheme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
+                                                            theme={theme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
                                                             lazyLoadEmojis
                                                         />
                                                     </div>
@@ -286,7 +286,7 @@ export default function ProfilePage() {
                                     type="button"
                                     onClick={handleSave}
                                     disabled={!dirty || saving}
-                                    className={`rounded-xl bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 ${EASE} hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-40`}
+                                    className={`rounded-xl bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 ${EASE} hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-40`}
                                 >
                                     {saving ? "Saving..." : "Save changes"}
                                 </button>

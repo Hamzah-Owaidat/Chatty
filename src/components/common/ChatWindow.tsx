@@ -755,7 +755,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                   presence={presence[msg.senderId]}
                   placement="right"
                 >
-                  <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={isCompact ? 26 : 32} />
+                  <UserAvatar src={senderAvatar} name={getSenderName(msg)} size={32} />
                 </UserHoverCard>
               </span>
             )}
@@ -820,7 +820,7 @@ export default function ChatWindow({ chatId }: ChatWindowProps) {
                 src={activeChat?.avatar}
                 name={chatDisplayName}
                 size={44}
-                className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(var(--accent-rgb),.65)]"
+                className="rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_8px_16px_-10px_rgba(26,123,155,.65)]"
               />
               {!isGroupChat && isPeerOnline && (
                 <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
