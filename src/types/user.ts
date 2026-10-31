@@ -12,6 +12,7 @@ export interface User {
   // New address awaiting confirmation (PATCH /user/me/email). `email` stays the
   // login/notification address until the link sent here is clicked.
   pendingEmail?: string | null;
+  notificationPreferences?: NotificationPreferences;
   // add other fields as needed
 }
 
@@ -28,4 +29,11 @@ export interface UserProfile {
   status?: 'online' | 'offline';
   // Only meaningful when status is "offline".
   lastSeenAt?: string;
+}
+
+// Which events raise a notification (bell dot today). All default to true server-side.
+export interface NotificationPreferences {
+  notifyOnMessage: boolean;
+  notifyOnChatRequest: boolean;
+  notifyOnGroupInvite: boolean;
 }

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
 import { ApiEnvelope } from '@/types/chat/chat.models';
-import { User } from '@/types/user';
+import { NotificationPreferences, User } from '@/types/user';
 
 // Account settings endpoints (CHT-21). Same envelope/error convention as lib/api/user.ts:
 // resolves with `data` on success, throws the backend's { isSuccess, error } body otherwise.
@@ -44,6 +44,20 @@ export async function changeEmail(newEmail: string, password: string): Promise<U
       { newEmail, password },
       { headers: authHeaders() }
     );
+    return response.data.data;
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
+
+// PATCH /api/user/me/notifications — partial; omitted flags are left unchanged.
+export async function updateNotificationPreferences(
+  changes: Partial<NotificationPreferences>
+): Promise<NotificationPreferences> {
+  try {
+    const response = await api.patch<ApiEnvelope<NotificationPreferences>>('/user/me/notifications', changes, {
+      headers: authHeaders(),
+    });
     return response.data.data;
   } catch (err) {
     rethrowApiError(err);

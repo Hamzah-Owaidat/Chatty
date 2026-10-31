@@ -10,6 +10,8 @@ import { showToast } from "@/utils/toast";
 import { useChat } from "@/context/ChatContext";
 import { startSignalRConnection } from "@/lib/signalr/signalr";
 import UserAvatar from "@/components/common/UserAvatar";
+import { useAppSelector } from "@/store/hooks";
+import { shouldNotifyForRequest } from "@/utils/notifications";
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,6 +19,9 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(true);
   const [actingOnId, setActingOnId] = useState<string | null>(null);
   const { refreshChatList } = useChat();
+  const notificationPreferences = useAppSelector((state) => state.auth.user?.notificationPreferences);
+  // Muted request types still appear in the list; they just don't light up the bell.
+  const hasAlert = requests.some((r) => shouldNotifyForRequest(r, notificationPreferences));
 
   const fetchIncoming = async () => {
     try {
@@ -117,7 +122,7 @@ export default function NotificationDropdown() {
       >
         <span
           className={`absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400 ${
-            requests.length > 0 ? "flex" : "hidden"
+            hasAlert ? "flex" : "hidden"
           }`}
         >
           <span className="absolute inline-flex w-full h-full bg-orange-400 rounded-full opacity-75 animate-ping"></span>

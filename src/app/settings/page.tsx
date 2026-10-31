@@ -27,6 +27,7 @@ import { showToast } from "@/utils/toast";
 import { EASE, SegmentedControl, SettingRow } from "@/components/settings/shared";
 import ChangePasswordSetting from "@/components/settings/ChangePasswordSetting";
 import ChangeEmailSetting from "@/components/settings/ChangeEmailSetting";
+import NotificationSettings from "@/components/settings/NotificationSettings";
 
 type SectionId = "appearance" | "chat" | "storage" | "security" | "privacy" | "notifications" | "danger";
 
@@ -312,12 +313,10 @@ export default function SettingsPage() {
                             )}
 
                             {activeSection === "notifications" && (
-                                <PlaceholderRows
-                                    rows={[
-                                        { icon: Bell, label: "Message & request alerts" },
-                                        { icon: Volume2, label: "Notification sound" },
-                                    ]}
-                                />
+                                <div className="space-y-3">
+                                    <NotificationSettings />
+                                    <PlaceholderRows rows={[{ icon: Volume2, label: "Notification sound" }]} />
+                                </div>
                             )}
 
                             {activeSection === "danger" && (
