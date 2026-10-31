@@ -9,7 +9,6 @@ import {
     Lock,
     LogOut,
     LucideIcon,
-    Mail,
     MessageSquare,
     Palette,
     Shield,
@@ -27,6 +26,7 @@ import { formatFileSize } from "@/utils/file";
 import { showToast } from "@/utils/toast";
 import { EASE, SegmentedControl, SettingRow } from "@/components/settings/shared";
 import ChangePasswordSetting from "@/components/settings/ChangePasswordSetting";
+import ChangeEmailSetting from "@/components/settings/ChangeEmailSetting";
 
 type SectionId = "appearance" | "chat" | "storage" | "security" | "privacy" | "notifications" | "danger";
 
@@ -296,12 +296,8 @@ export default function SettingsPage() {
                             {activeSection === "security" && (
                                 <div className="space-y-3">
                                     <ChangePasswordSetting />
-                                    <PlaceholderRows
-                                        rows={[
-                                            { icon: Mail, label: "Change email" },
-                                            { icon: Shield, label: "Active sessions" },
-                                        ]}
-                                    />
+                                    <ChangeEmailSetting />
+                                    <PlaceholderRows rows={[{ icon: Shield, label: "Active sessions" }]} />
                                 </div>
                             )}
 

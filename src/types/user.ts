@@ -9,6 +9,9 @@ export interface User {
   // ISO 8601 timestamp of the last display name change. Undefined/null means it has
   // never been changed and is free to update immediately (see utils/time#getDisplayNameCooldown).
   displayNameUpdatedAt?: string;
+  // New address awaiting confirmation (PATCH /user/me/email). `email` stays the
+  // login/notification address until the link sent here is clicked.
+  pendingEmail?: string | null;
   // add other fields as needed
 }
 

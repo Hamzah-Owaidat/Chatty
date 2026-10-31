@@ -2,6 +2,7 @@ import axios from 'axios';
 import { getSavedToken } from '@/utils/authToken';
 import api from './client';
 import { ApiEnvelope } from '@/types/chat/chat.models';
+import { User } from '@/types/user';
 
 // Account settings endpoints (CHT-21). Same envelope/error convention as lib/api/user.ts:
 // resolves with `data` on success, throws the backend's { isSuccess, error } body otherwise.
@@ -29,6 +30,21 @@ export async function changePassword(currentPassword: string, newPassword: strin
       { headers: authHeaders() }
     );
     return response.data.message ?? 'Your password has been changed.';
+  } catch (err) {
+    rethrowApiError(err);
+  }
+}
+
+// PATCH /api/user/me/email — { newEmail, password }. Returns the user with pendingEmail
+// set; `email` itself only changes once the link mailed to the new address is clicked.
+export async function changeEmail(newEmail: string, password: string): Promise<User> {
+  try {
+    const response = await api.patch<ApiEnvelope<User>>(
+      '/user/me/email',
+      { newEmail, password },
+      { headers: authHeaders() }
+    );
+    return response.data.data;
   } catch (err) {
     rethrowApiError(err);
   }
