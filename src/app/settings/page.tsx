@@ -6,11 +6,8 @@ import {
     Bell,
     Eye,
     HardDrive,
-    KeyRound,
     Lock,
-    LogOut,
     LucideIcon,
-    Mail,
     MessageSquare,
     Palette,
     Shield,
@@ -27,8 +24,13 @@ import { clearAllCachedMedia, getCacheStats } from "@/lib/media/mediaCache";
 import { FONT_OPTIONS, FontId, ensureAllFontsLoaded } from "@/lib/fonts";
 import { formatFileSize } from "@/utils/file";
 import { showToast } from "@/utils/toast";
-
-const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
+import { EASE, SegmentedControl, SettingRow } from "@/components/settings/shared";
+import ChangePasswordSetting from "@/components/settings/ChangePasswordSetting";
+import ChangeEmailSetting from "@/components/settings/ChangeEmailSetting";
+import LastSeenSetting from "@/components/settings/LastSeenSetting";
+import NotificationSettings from "@/components/settings/NotificationSettings";
+import ReadReceiptsSetting from "@/components/settings/ReadReceiptsSetting";
+import LogOutAllDevicesSetting from "@/components/settings/LogOutAllDevicesSetting";
 
 type SectionId = "appearance" | "chat" | "storage" | "security" | "privacy" | "notifications" | "danger";
 
@@ -65,35 +67,6 @@ function SectionHeader({ section }: { section: SectionDef }) {
                 {section.label}
             </h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">{section.description}</p>
-        </div>
-    );
-}
-
-function SegmentedControl<T extends string>({
-    value,
-    onChange,
-    options,
-}: {
-    value: T;
-    onChange: (value: T) => void;
-    options: { value: T; label: string }[];
-}) {
-    return (
-        <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 p-1 dark:border-stone-700 dark:bg-stone-800/60">
-            {options.map((opt) => (
-                <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => onChange(opt.value)}
-                    className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${EASE} ${
-                        value === opt.value
-                            ? "bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-white shadow-sm"
-                            : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-white"
-                    }`}
-                >
-                    {opt.label}
-                </button>
-            ))}
         </div>
     );
 }
@@ -191,18 +164,6 @@ function WallpaperPicker({ value, onChange }: { value: Preferences["chatWallpape
                     <span className="text-[11px] font-medium text-gray-500 dark:text-stone-400">{opt.label}</span>
                 </button>
             ))}
-        </div>
-    );
-}
-
-function SettingRow({ title, description, control }: { title: string; description: string; control: React.ReactNode }) {
-    return (
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3.5 dark:border-stone-700 dark:bg-stone-800/60">
-            <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-800 dark:text-white/90">{title}</p>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-400">{description}</p>
-            </div>
-            {control}
         </div>
     );
 }
@@ -503,37 +464,31 @@ export default function SettingsPage() {
                             )}
 
                             {activeSection === "security" && (
-                                <PlaceholderRows
-                                    rows={[
-                                        { icon: KeyRound, label: "Change password" },
-                                        { icon: Mail, label: "Change email" },
-                                        { icon: Shield, label: "Active sessions" },
-                                    ]}
-                                />
+                                <div className="space-y-3">
+                                    <ChangePasswordSetting />
+                                    <ChangeEmailSetting />
+                                    <PlaceholderRows rows={[{ icon: Shield, label: "Active sessions" }]} />
+                                </div>
                             )}
 
                             {activeSection === "privacy" && (
-                                <PlaceholderRows
-                                    rows={[
-                                        { icon: Eye, label: "Last seen visibility" },
-                                        { icon: Shield, label: "Read receipts" },
-                                        { icon: UserX, label: "Blocked users" },
-                                    ]}
-                                />
+                                <div className="space-y-3">
+                                    <LastSeenSetting />
+                                    <ReadReceiptsSetting />
+                                    <PlaceholderRows rows={[{ icon: UserX, label: "Blocked users" }]} />
+                                </div>
                             )}
 
                             {activeSection === "notifications" && (
-                                <PlaceholderRows
-                                    rows={[
-                                        { icon: Bell, label: "Message & request alerts" },
-                                        { icon: Volume2, label: "Notification sound" },
-                                    ]}
-                                />
+                                <div className="space-y-3">
+                                    <NotificationSettings />
+                                    <PlaceholderRows rows={[{ icon: Volume2, label: "Notification sound" }]} />
+                                </div>
                             )}
 
                             {activeSection === "danger" && (
                                 <div className="space-y-2">
-                                    <DangerRow icon={LogOut} label="Log out of all devices" />
+                                    <LogOutAllDevicesSetting />
                                     <DangerRow icon={Trash2} label="Delete account" />
                                 </div>
                             )}

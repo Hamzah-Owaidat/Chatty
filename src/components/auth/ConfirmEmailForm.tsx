@@ -9,6 +9,9 @@ import Input from "@/components/form/input/InputField";
 import { confirmEmail, resendConfirmationEmail } from "@/lib/api/auth";
 import { getErrorMessage } from "@/utils/error";
 import { showToast } from "@/utils/toast";
+import { getSavedToken } from "@/utils/authToken";
+import { useAppDispatch } from "@/store/hooks";
+import { fetchCurrentUser } from "@/store/slices/authSlice";
 import { BackToSignIn, IconTile, emailPattern, errorInputClass, primaryButtonClass } from "./shared";
 
 type Status = "confirming" | "success" | "error";
@@ -20,7 +23,9 @@ export default function ConfirmEmailForm() {
 
   const [status, setStatus] = useState<Status>("confirming");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("Your email has been confirmed. You can now log in.");
   const ranRef = useRef(false);
+  const dispatch = useAppDispatch();
 
   const [resendEmail, setResendEmail] = useState("");
   const [resendEmailError, setResendEmailError] = useState<string | undefined>();
@@ -45,13 +50,17 @@ export default function ConfirmEmailForm() {
           setErrorMessage(res.error || "This confirmation link is invalid or has expired.");
           return;
         }
+        // Same endpoint confirms a signup or an email change; the backend's message says which.
+        if (res.message) setSuccessMessage(res.message);
+        // Email change from Settings: refresh the signed-in user so the new address shows up.
+        if (getSavedToken()) dispatch(fetchCurrentUser());
         setStatus("success");
       } catch (err) {
         setStatus("error");
         setErrorMessage(getErrorMessage(err));
       }
     })();
-  }, [userId, token]);
+  }, [userId, token, dispatch]);
 
   const submitResend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +118,7 @@ export default function ConfirmEmailForm() {
             Email confirmed
           </h1>
           <p className="mb-8 text-sm text-gray-500 dark:text-stone-400">
-            Your email has been confirmed. You can now log in.
+            {successMessage}
           </p>
 
           <Button type="button" variant="sea" className={primaryButtonClass} onClick={() => (window.location.href = "/auth/signin")}>

@@ -1,5 +1,6 @@
 import * as signalR from "@microsoft/signalr";
 import { getSavedToken } from "@/utils/authToken";
+import { endSession } from "@/lib/auth/session";
 
 let connection: signalR.HubConnection | null = null;
 let connectionPromise: Promise<signalR.HubConnection> | null = null;
@@ -66,6 +67,12 @@ export const startSignalRConnection = async (): Promise<signalR.HubConnection> =
         },
       })
       .build();
+
+    // "Log out of all devices" (from this or any other device): the server sends this
+    // right before closing the connection, and refuses the reconnect.
+    newConnection.on("SessionRevoked", () => {
+      void endSession("revoked");
+    });
 
     newConnection
       .start()
