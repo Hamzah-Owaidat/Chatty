@@ -6,7 +6,6 @@ import {
     Bell,
     Eye,
     HardDrive,
-    KeyRound,
     Lock,
     LogOut,
     LucideIcon,
@@ -26,8 +25,8 @@ import { usePreferences } from "@/context/PreferencesContext";
 import { clearAllCachedMedia, getCacheStats } from "@/lib/media/mediaCache";
 import { formatFileSize } from "@/utils/file";
 import { showToast } from "@/utils/toast";
-
-const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
+import { EASE, SegmentedControl, SettingRow } from "@/components/settings/shared";
+import ChangePasswordSetting from "@/components/settings/ChangePasswordSetting";
 
 type SectionId = "appearance" | "chat" | "storage" | "security" | "privacy" | "notifications" | "danger";
 
@@ -64,47 +63,6 @@ function SectionHeader({ section }: { section: SectionDef }) {
                 {section.label}
             </h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">{section.description}</p>
-        </div>
-    );
-}
-
-function SegmentedControl<T extends string>({
-    value,
-    onChange,
-    options,
-}: {
-    value: T;
-    onChange: (value: T) => void;
-    options: { value: T; label: string }[];
-}) {
-    return (
-        <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 p-1 dark:border-stone-700 dark:bg-stone-800/60">
-            {options.map((opt) => (
-                <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => onChange(opt.value)}
-                    className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${EASE} ${
-                        value === opt.value
-                            ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-sm"
-                            : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-white"
-                    }`}
-                >
-                    {opt.label}
-                </button>
-            ))}
-        </div>
-    );
-}
-
-function SettingRow({ title, description, control }: { title: string; description: string; control: React.ReactNode }) {
-    return (
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3.5 dark:border-stone-700 dark:bg-stone-800/60">
-            <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-800 dark:text-white/90">{title}</p>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-stone-400">{description}</p>
-            </div>
-            {control}
         </div>
     );
 }
@@ -336,13 +294,15 @@ export default function SettingsPage() {
                             )}
 
                             {activeSection === "security" && (
-                                <PlaceholderRows
-                                    rows={[
-                                        { icon: KeyRound, label: "Change password" },
-                                        { icon: Mail, label: "Change email" },
-                                        { icon: Shield, label: "Active sessions" },
-                                    ]}
-                                />
+                                <div className="space-y-3">
+                                    <ChangePasswordSetting />
+                                    <PlaceholderRows
+                                        rows={[
+                                            { icon: Mail, label: "Change email" },
+                                            { icon: Shield, label: "Active sessions" },
+                                        ]}
+                                    />
+                                </div>
                             )}
 
                             {activeSection === "privacy" && (
