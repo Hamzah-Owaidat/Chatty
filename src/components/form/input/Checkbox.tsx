@@ -29,7 +29,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
           id={id}
           type="checkbox"
           className={twMerge(
-            "h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border border-gray-300 transition-all duration-150 checked:border-transparent checked:bg-gradient-to-br checked:from-[#1f88aa] checked:to-[#17708d] checked:shadow-[0_2px_6px_-1px_rgba(26,123,155,.6)] disabled:opacity-60 dark:border-stone-600",
+            "h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border border-gray-300 transition-all duration-150 checked:border-transparent checked:bg-gradient-to-br checked:from-accent-500 checked:to-accent-700 checked:shadow-[0_2px_6px_-1px_rgba(var(--accent-rgb),.6)] disabled:opacity-60 dark:border-stone-600",
             className
           )}
           checked={checked}

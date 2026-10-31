@@ -46,7 +46,7 @@ export default function PendingAttachments({ files, onRemove, uploadProgress }: 
             ) : (
               <div className="flex flex-col items-center gap-1 px-1 text-center">
                 {pending.kind === FileKind.Audio ? (
-                  <Music className="h-6 w-6 text-[#1a7b9b] dark:text-[#60c7e3]" />
+                  <Music className="h-6 w-6 text-accent-600 dark:text-accent-300" />
                 ) : (
                   <FileText className="h-6 w-6 text-theme-purple-500" />
                 )}
@@ -72,7 +72,7 @@ export default function PendingAttachments({ files, onRemove, uploadProgress }: 
         <div className="mt-1.5 flex items-center gap-2">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-stone-700">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[#1f88aa] to-[#17708d] transition-[width] duration-200"
+              className="h-full rounded-full bg-gradient-to-r from-accent-500 to-accent-700 transition-[width] duration-200"
               style={{ width: `${uploadProgress}%` }}
             />
           </div>

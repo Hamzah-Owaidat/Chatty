@@ -13,7 +13,7 @@ import UserAvatar from "@/components/common/UserAvatar";
 
 const EASE = "ease-[cubic-bezier(.2,.8,.2,1)]";
 const menuItemClass =
-  "flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13px] font-medium text-gray-700 transition-colors duration-150 hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]";
+  "flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13px] font-medium text-gray-700 transition-colors duration-150 hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300";
 
 export default function UserDropdown() {
 
@@ -68,7 +68,7 @@ export default function UserDropdown() {
     return (
       <Link
         href="auth/signin"
-        className="px-4 py-2 text-sm font-medium text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]"
+        className="px-4 py-2 text-sm font-medium text-accent-600 hover:text-accent-link-hover dark:text-accent-300"
       >
         Sign In
       </Link>

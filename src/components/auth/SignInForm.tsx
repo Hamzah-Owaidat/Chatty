@@ -230,7 +230,7 @@ export default function SignInForm() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15`}
+                  className={`absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-accent-600/10 dark:hover:bg-accent-400/15`}
                 >
                   {showPassword ? (
                     <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
@@ -252,7 +252,7 @@ export default function SignInForm() {
               </div>
               <Link
                 href="/auth/forgot-password"
-                className="text-sm text-[#1a7b9b] hover:text-[#15657d] dark:text-[#60c7e3]"
+                className="text-sm text-accent-600 hover:text-accent-link-hover dark:text-accent-300"
               >
                 Forgot password?
               </Link>
@@ -269,7 +269,7 @@ export default function SignInForm() {
                 hideTextWhenLoading
                 icon={<ArrowRight size={18} />}
                 iconPosition="right"
-                className={`w-full rounded-2xl! bg-gradient-to-br! from-[#1f88aa] via-[#1a7b9b] to-[#17708d] shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_16px_30px_-16px_rgba(26,123,155,.75)]! ${EASE} active:scale-[.985]!`}
+                className={`w-full rounded-2xl! bg-gradient-to-br! from-accent-500 via-accent-600 to-accent-700 shadow-[inset_0_1px_0_rgba(255,255,255,.25),0_1px_2px_rgba(16,24,40,.04),0_16px_30px_-16px_rgba(var(--accent-rgb),.75)]! ${EASE} active:scale-[.985]!`}
               >
                 Sign In
               </Button>
@@ -313,7 +313,7 @@ export default function SignInForm() {
                         hideTextWhenLoading
                         icon={<Send size={14} />}
                         iconPosition="right"
-                        className={`rounded-xl! bg-gradient-to-br! from-[#1f88aa] via-[#1a7b9b] to-[#17708d] ${EASE}`}
+                        className={`rounded-xl! bg-gradient-to-br! from-accent-500 via-accent-600 to-accent-700 ${EASE}`}
                       >
                         Resend confirmation email
                       </Button>
@@ -327,7 +327,7 @@ export default function SignInForm() {
           <div className="mt-5">
             <p className="text-sm text-center text-gray-700 dark:text-gray-400 sm:text-start">
               Don&apos;t have an account?{" "}
-              <Link href="/auth/signup" className="font-medium text-[#1a7b9b] underline underline-offset-2 hover:text-[#15657d] dark:text-[#60c7e3]">
+              <Link href="/auth/signup" className="font-medium text-accent-600 underline underline-offset-2 hover:text-accent-link-hover dark:text-accent-300">
                 Sign Up
               </Link>
             </p>

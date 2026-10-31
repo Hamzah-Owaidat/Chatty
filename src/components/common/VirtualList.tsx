@@ -86,7 +86,7 @@ interface ListContext {
 
 const DefaultLoadingIndicator = () => (
   <div className="flex justify-center py-3" role="status" aria-label="Loading more">
-    <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#1a7b9b] border-t-transparent dark:border-[#60c7e3] dark:border-t-transparent" />
+    <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent-600 border-t-transparent dark:border-accent-300 dark:border-t-transparent" />
   </div>
 );
 

@@ -7,9 +7,9 @@ export const ROW_CLASS =
     "rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3.5 dark:border-stone-700 dark:bg-stone-800/60";
 
 export const FIELD_CLASS =
-    "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#1a7b9b] focus:ring-4 focus:ring-[#1a7b9b]/12 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white/90 dark:placeholder:text-stone-500";
+    "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-accent-600 focus:ring-4 focus:ring-accent-600/12 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-white/90 dark:placeholder:text-stone-500";
 
-export const PRIMARY_BUTTON_CLASS = `rounded-xl bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 ${EASE} active:scale-[.985] disabled:pointer-events-none disabled:opacity-50`;
+export const PRIMARY_BUTTON_CLASS = `rounded-xl bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 ${EASE} active:scale-[.985] disabled:pointer-events-none disabled:opacity-50`;
 
 export const SECONDARY_BUTTON_CLASS = `rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm font-medium text-gray-700 transition-all duration-200 ${EASE} hover:bg-gray-100 disabled:pointer-events-none disabled:opacity-40 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-white/5`;
 
@@ -34,7 +34,7 @@ export function SegmentedControl<T extends string>({
                     onClick={() => onChange(opt.value)}
                     className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${EASE} disabled:opacity-60 ${
                         value === opt.value
-                            ? "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] text-white shadow-sm"
+                            ? "bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 text-white shadow-sm"
                             : "text-gray-600 hover:text-gray-800 dark:text-stone-400 dark:hover:text-white"
                     }`}
                 >

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { LANDING_STATS, type LandingStat } from "./landing-data";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const percent = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -33,10 +34,11 @@ function useInView<T extends Element>() {
 
 function useCountUp(target: number, active: boolean, duration = 1600): number {
   const [value, setValue] = useState(target);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (!active) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (reducedMotion) {
       setValue(target);
       return;
     }
@@ -51,7 +53,7 @@ function useCountUp(target: number, active: boolean, duration = 1600): number {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [target, active, duration]);
+  }, [target, active, duration, reducedMotion]);
 
   return value;
 }

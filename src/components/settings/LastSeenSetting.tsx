@@ -171,7 +171,7 @@ export default function LastSeenSetting() {
                                                 <span className="flex-1 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
                                                     {result.displayName}
                                                 </span>
-                                                <span className="text-xs font-medium text-[#1a7b9b] dark:text-[#60c7e3]">Add</span>
+                                                <span className="text-xs font-medium text-accent-600 dark:text-accent-300">Add</span>
                                             </button>
                                         </li>
                                     ))}

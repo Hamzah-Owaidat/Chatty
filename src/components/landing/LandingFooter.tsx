@@ -31,7 +31,7 @@ const COLUMNS = [
 export function CtaSection() {
   return (
     <section aria-labelledby="cta-heading" className="px-4 pb-16 sm:px-6 sm:pb-24">
-      <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d] px-6 py-12 text-center shadow-[0_30px_60px_-30px_rgba(26,123,155,.8)] sm:px-12 sm:py-16">
+      <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl bg-gradient-to-br from-accent-500 via-accent-600 to-accent-700 px-6 py-12 text-center shadow-[0_30px_60px_-30px_rgba(var(--accent-rgb),.8)] sm:px-12 sm:py-16">
         <h2 id="cta-heading" className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
           Start your first conversation today
         </h2>
@@ -40,7 +40,7 @@ export function CtaSection() {
         </p>
         <Link
           href="/auth/signup"
-          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-medium text-[#15657d] shadow-[0_10px_20px_-12px_rgba(0,0,0,.4)] transition hover:-translate-y-0.5"
+          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-medium text-accent-link-hover shadow-[0_10px_20px_-12px_rgba(0,0,0,.4)] transition hover:-translate-y-0.5"
         >
           Get started
           <ArrowRight size={16} />
@@ -70,11 +70,11 @@ export default function LandingFooter() {
               {column.links.map((link) => (
                 <li key={link.href}>
                   {link.href.startsWith("#") ? (
-                    <a href={link.href} className="text-sm text-gray-600 transition hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:text-[#60c7e3]">
+                    <a href={link.href} className="text-sm text-gray-600 transition hover:text-accent-600 dark:text-stone-300 dark:hover:text-accent-300">
                       {link.label}
                     </a>
                   ) : (
-                    <Link href={link.href} className="text-sm text-gray-600 transition hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:text-[#60c7e3]">
+                    <Link href={link.href} className="text-sm text-gray-600 transition hover:text-accent-600 dark:text-stone-300 dark:hover:text-accent-300">
                       {link.label}
                     </Link>
                   )}

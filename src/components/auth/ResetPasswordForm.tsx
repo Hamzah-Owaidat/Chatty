@@ -132,7 +132,7 @@ export default function ResetPasswordForm() {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Hide new password" : "Show new password"}
-                className="absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15"
+                className="absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-accent-600/10 dark:hover:bg-accent-400/15"
               >
                 {showPassword ? (
                   <EyeIcon className="fill-gray-500 dark:fill-gray-400" />
@@ -172,7 +172,7 @@ export default function ResetPasswordForm() {
                 type="button"
                 onClick={() => setShowConfirmPassword((v) => !v)}
                 aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-                className="absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-[#1a7b9b]/10 dark:hover:bg-[#2596bb]/15"
+                className="absolute right-1.5 top-1/2 z-30 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[9px] transition-colors duration-150 hover:bg-accent-600/10 dark:hover:bg-accent-400/15"
               >
                 {showConfirmPassword ? (
                   <EyeIcon className="fill-gray-500 dark:fill-gray-400" />

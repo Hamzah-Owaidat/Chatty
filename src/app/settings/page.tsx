@@ -19,8 +19,9 @@ import LoadingSpinner from "@/components/common/LoadingSpinner";
 import Toggle from "@/components/common/Toggle";
 import { useAppSelector } from "@/store/hooks";
 import { useTheme } from "@/context/ThemeContext";
-import { usePreferences } from "@/context/PreferencesContext";
+import { Preferences, usePreferences } from "@/context/PreferencesContext";
 import { clearAllCachedMedia, getCacheStats } from "@/lib/media/mediaCache";
+import { FONT_OPTIONS, FontId, ensureAllFontsLoaded } from "@/lib/fonts";
 import { formatFileSize } from "@/utils/file";
 import { showToast } from "@/utils/toast";
 import { EASE, SegmentedControl, SettingRow } from "@/components/settings/shared";
@@ -66,6 +67,103 @@ function SectionHeader({ section }: { section: SectionDef }) {
                 {section.label}
             </h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-stone-400">{section.description}</p>
+        </div>
+    );
+}
+
+// Fixed preview colors for each accent preset — deliberately literal (not accent-* tokens),
+// since these swatches need to show what an option looks like regardless of which one is
+// currently active, not resolve to the live theme.
+const ACCENT_OPTIONS: { value: Preferences["accentTheme"]; label: string; swatch: string }[] = [
+    { value: "teal", label: "Teal", swatch: "bg-gradient-to-br from-[#1f88aa] via-[#1a7b9b] to-[#17708d]" },
+    { value: "indigo", label: "Indigo", swatch: "bg-gradient-to-br from-[#465fe0] via-[#3b4fcc] to-[#2f3fb0]" },
+    { value: "rose", label: "Rose", swatch: "bg-gradient-to-br from-[#e14f84] via-[#cc3a6e] to-[#ad2d5a]" },
+    { value: "amber", label: "Amber", swatch: "bg-gradient-to-br from-[#d6911a] via-[#b97711] to-[#97600f]" },
+    { value: "forest", label: "Forest", swatch: "bg-gradient-to-br from-[#2f9259] via-[#237a49] to-[#1c633b]" },
+];
+
+function AccentSwatchPicker({ value, onChange }: { value: Preferences["accentTheme"]; onChange: (value: Preferences["accentTheme"]) => void }) {
+    return (
+        <div className="flex flex-wrap gap-4">
+            {ACCENT_OPTIONS.map((opt) => (
+                <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onChange(opt.value)}
+                    aria-pressed={value === opt.value}
+                    aria-label={opt.label}
+                    className="group flex flex-col items-center gap-1.5"
+                >
+                    <span
+                        className={`block h-9 w-9 rounded-full ${opt.swatch} transition-transform duration-200 ${EASE} ${
+                            value === opt.value
+                                ? "ring-2 ring-gray-400 ring-offset-2 ring-offset-white dark:ring-stone-400 dark:ring-offset-[#201d1b]"
+                                : "ring-1 ring-black/10 group-hover:scale-110 dark:ring-white/10"
+                        }`}
+                    />
+                    <span className="text-[11px] font-medium text-gray-500 dark:text-stone-400">{opt.label}</span>
+                </button>
+            ))}
+        </div>
+    );
+}
+
+function FontPicker({ value, onChange }: { value: FontId; onChange: (value: FontId) => void }) {
+    // Previewing every option in its real typeface means every option needs to actually be
+    // loaded — unlike normal usage, which only ever fetches the active font (see lib/fonts.ts).
+    useEffect(() => {
+        ensureAllFontsLoaded();
+    }, []);
+
+    return (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {FONT_OPTIONS.map((font) => (
+                <button
+                    key={font.id}
+                    type="button"
+                    onClick={() => onChange(font.id)}
+                    aria-pressed={value === font.id}
+                    className={`rounded-xl border px-3.5 py-3 text-left transition-all duration-200 ${EASE} ${
+                        value === font.id
+                            ? "border-accent-600/60 bg-accent-600/5 ring-2 ring-accent-600/15 dark:border-accent-400/60"
+                            : "border-gray-200 hover:border-gray-300 dark:border-stone-700 dark:hover:border-stone-600"
+                    }`}
+                >
+                    <span className="block truncate text-base text-gray-800 dark:text-white/90" style={{ fontFamily: font.cssValue }}>
+                        {font.label}
+                    </span>
+                </button>
+            ))}
+        </div>
+    );
+}
+
+const WALLPAPER_OPTIONS: { value: Preferences["chatWallpaper"]; label: string }[] = [
+    { value: "none", label: "None" },
+    { value: "dots", label: "Dots" },
+    { value: "diagonal", label: "Diagonal" },
+    { value: "wash", label: "Wash" },
+];
+
+function WallpaperPicker({ value, onChange }: { value: Preferences["chatWallpaper"]; onChange: (value: Preferences["chatWallpaper"]) => void }) {
+    return (
+        <div className="flex flex-wrap gap-4">
+            {WALLPAPER_OPTIONS.map((opt) => (
+                <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onChange(opt.value)}
+                    aria-pressed={value === opt.value}
+                    className="flex flex-col items-center gap-1.5"
+                >
+                    <span
+                        className={`block h-12 w-16 overflow-hidden rounded-lg border bg-white dark:bg-stone-800 ${
+                            opt.value !== "none" ? `chat-wallpaper-${opt.value}` : ""
+                        } ${value === opt.value ? "border-accent-600 ring-2 ring-accent-600/20" : "border-gray-200 dark:border-stone-700"}`}
+                    />
+                    <span className="text-[11px] font-medium text-gray-500 dark:text-stone-400">{opt.label}</span>
+                </button>
+            ))}
         </div>
     );
 }
@@ -153,7 +251,7 @@ export default function SettingsPage() {
             <div className="mx-auto max-w-4xl">
                 <Link
                     href="/chat"
-                    className={`mb-6 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors duration-200 ${EASE} hover:bg-[#1a7b9b]/10 hover:text-[#1a7b9b] dark:text-stone-300 dark:hover:bg-[#2596bb]/15 dark:hover:text-[#60c7e3]`}
+                    className={`mb-6 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors duration-200 ${EASE} hover:bg-accent-600/10 hover:text-accent-600 dark:text-stone-300 dark:hover:bg-accent-400/15 dark:hover:text-accent-300`}
                 >
                     <ArrowLeft size={16} />
                     Back to chats
@@ -194,7 +292,7 @@ export default function SettingsPage() {
                                                 isActive
                                                     ? s.danger
                                                         ? "bg-error-500/10 text-error-600 dark:text-error-400"
-                                                        : "bg-gradient-to-r from-[#1a7b9b]/[0.12] to-transparent text-[#1a7b9b] dark:from-[#2596bb]/[0.18] dark:text-[#60c7e3]"
+                                                        : "bg-gradient-to-r from-accent-600/[0.12] to-transparent text-accent-600 dark:from-accent-400/[0.18] dark:text-accent-300"
                                                     : s.danger
                                                       ? "text-error-500/80 hover:bg-error-500/5 hover:text-error-600 dark:hover:text-error-400"
                                                       : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-800 dark:text-stone-400 dark:hover:bg-white/[0.04] dark:hover:text-white"
@@ -213,31 +311,100 @@ export default function SettingsPage() {
                             <SectionHeader section={section} />
 
                             {activeSection === "appearance" && (
-                                <div className="space-y-5">
-                                    <div>
-                                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Theme</span>
-                                        <SegmentedControl
-                                            value={theme}
-                                            onChange={setTheme}
-                                            options={[
-                                                { value: "light", label: "Light" },
-                                                { value: "dark", label: "Dark" },
-                                                { value: "system", label: "System" },
-                                            ]}
+                                <div className="space-y-8">
+                                    <div className="space-y-5">
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Theme</span>
+                                            <SegmentedControl
+                                                value={theme}
+                                                onChange={setTheme}
+                                                options={[
+                                                    { value: "light", label: "Light" },
+                                                    { value: "dark", label: "Dark" },
+                                                    { value: "system", label: "System" },
+                                                ]}
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Accent color</span>
+                                            <AccentSwatchPicker
+                                                value={preferences.accentTheme}
+                                                onChange={(value) => setPreference("accentTheme", value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Font</span>
+                                            <FontPicker value={preferences.fontFamily} onChange={(value) => setPreference("fontFamily", value)} />
+                                        </div>
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Font size</span>
+                                            <SegmentedControl
+                                                value={preferences.fontScale}
+                                                onChange={(value) => setPreference("fontScale", value)}
+                                                options={[
+                                                    { value: "small", label: "Small" },
+                                                    { value: "medium", label: "Medium" },
+                                                    { value: "large", label: "Large" },
+                                                ]}
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">
+                                                Message density
+                                            </span>
+                                            <SegmentedControl
+                                                value={preferences.messageDensity}
+                                                onChange={(value) => setPreference("messageDensity", value)}
+                                                options={[
+                                                    { value: "comfortable", label: "Comfortable" },
+                                                    { value: "compact", label: "Compact" },
+                                                ]}
+                                            />
+                                        </div>
+                                        <SettingRow
+                                            title="Reduce motion"
+                                            description="Turns off animations and smooth scrolling app-wide, regardless of your system setting."
+                                            control={
+                                                <Toggle
+                                                    checked={preferences.reduceMotion}
+                                                    onChange={(value) => setPreference("reduceMotion", value)}
+                                                    label="Reduce motion"
+                                                />
+                                            }
                                         />
                                     </div>
-                                    <div>
-                                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">
-                                            Message density
-                                        </span>
-                                        <SegmentedControl
-                                            value={preferences.messageDensity}
-                                            onChange={(value) => setPreference("messageDensity", value)}
-                                            options={[
-                                                { value: "comfortable", label: "Comfortable" },
-                                                { value: "compact", label: "Compact" },
-                                            ]}
-                                        />
+
+                                    <div className="space-y-5 border-t border-gray-100 pt-6 dark:border-stone-800">
+                                        <h3 className="text-sm font-semibold text-gray-800 dark:text-white/90">Chat appearance</h3>
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Chat wallpaper</span>
+                                            <WallpaperPicker
+                                                value={preferences.chatWallpaper}
+                                                onChange={(value) => setPreference("chatWallpaper", value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Bubble shape</span>
+                                            <SegmentedControl
+                                                value={preferences.bubbleShape}
+                                                onChange={(value) => setPreference("bubbleShape", value)}
+                                                options={[
+                                                    { value: "tailed", label: "Tailed" },
+                                                    { value: "rounded", label: "Rounded" },
+                                                ]}
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-stone-300">Your bubble color</span>
+                                            <SegmentedControl
+                                                value={preferences.bubbleFill}
+                                                onChange={(value) => setPreference("bubbleFill", value)}
+                                                options={[
+                                                    { value: "gradient", label: "Gradient" },
+                                                    { value: "solid", label: "Solid" },
+                                                ]}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             )}

@@ -11,12 +11,12 @@ export default function Hero() {
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(900px 500px at 85% -10%, rgba(26,123,155,.16), transparent 70%), radial-gradient(700px 400px at -10% 20%, rgba(96,199,227,.14), transparent 70%)",
+            "radial-gradient(900px 500px at 85% -10%, rgba(var(--accent-rgb),.16), transparent 70%), radial-gradient(700px 400px at -10% 20%, rgba(var(--accent-300-rgb),.14), transparent 70%)",
         }}
       />
       <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-12 sm:px-6 md:grid-cols-2 md:pb-24 md:pt-20">
         <div className="animate-[floatIn_.6s_cubic-bezier(.2,.8,.2,1)_both]">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#1a7b9b]/25 bg-[#1a7b9b]/10 px-3 py-1 text-xs font-medium text-[#15657d] dark:border-[#2596bb]/30 dark:bg-[#2596bb]/15 dark:text-[#60c7e3]">
+          <span className="inline-flex items-center gap-2 rounded-full border border-accent-600/25 bg-accent-600/10 px-3 py-1 text-xs font-medium text-accent-link-hover dark:border-accent-400/30 dark:bg-accent-400/15 dark:text-accent-300">
             <span className="relative flex h-2 w-2">
               <span className="absolute inset-0 animate-ping rounded-full bg-[#12b76a] opacity-60 motion-reduce:animate-none" />
               <span className="relative h-2 w-2 rounded-full bg-[#12b76a]" />
@@ -34,7 +34,7 @@ export default function Hero() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/auth/signup"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1a7b9b] px-6 py-3 text-sm font-medium text-white shadow-[0_16px_30px_-16px_rgba(26,123,155,.85)] transition hover:-translate-y-0.5 hover:bg-[#166b87] dark:bg-[#2596bb] dark:hover:bg-[#2085a6]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-600 px-6 py-3 text-sm font-medium text-white shadow-[0_16px_30px_-16px_rgba(var(--accent-rgb),.85)] transition hover:-translate-y-0.5 hover:bg-accent-hover dark:bg-accent-400 dark:hover:bg-accent-hover-dark"
             >
               Get started
               <ArrowRight size={16} />

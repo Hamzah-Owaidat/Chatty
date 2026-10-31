@@ -117,7 +117,7 @@ export default function NotificationDropdown() {
     <div className="relative">
       <button
         aria-label="Chat requests"
-        className="relative dropdown-toggle flex h-10 w-10 items-center justify-center rounded-[14px] border border-gray-200/70 bg-white text-stone-600 shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:-translate-y-0.5 hover:text-[#1a7b9b] hover:shadow-[0_10px_20px_-14px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-stone-300 dark:hover:text-[#60c7e3]"
+        className="relative dropdown-toggle flex h-10 w-10 items-center justify-center rounded-[14px] border border-gray-200/70 bg-white text-stone-600 shadow-[0_1px_2px_rgba(16,24,40,.04)] transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:-translate-y-0.5 hover:text-accent-600 hover:shadow-[0_10px_20px_-14px_rgba(16,24,40,.35)] dark:border-stone-700/70 dark:bg-[#292524] dark:text-stone-300 dark:hover:text-accent-300"
         onClick={toggleDropdown}
       >
         <span
@@ -187,7 +187,7 @@ export default function NotificationDropdown() {
                 <div className="flex items-center gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 dark:border-gray-800">
                   <span className="relative block h-10 w-10 shrink-0 rounded-full">
                     {isGroupInvite && !request.chatImage ? (
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1a7b9b]/10 text-[#1a7b9b] dark:bg-[#2596bb]/15 dark:text-[#60c7e3]">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-600/10 text-accent-600 dark:bg-accent-400/15 dark:text-accent-300">
                         <Users size={18} />
                       </span>
                     ) : (

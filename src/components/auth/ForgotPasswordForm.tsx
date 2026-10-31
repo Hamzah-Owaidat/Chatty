@@ -46,7 +46,7 @@ export default function ForgotPasswordForm() {
           <BackToSignIn />
 
           <div className="rounded-[20px] border border-gray-200/70 bg-white/70 p-6 text-center backdrop-blur-md dark:border-stone-700/70 dark:bg-stone-900/60">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#1a7b9b]/25 bg-[#1a7b9b]/10 text-[#1a7b9b] dark:border-[#2596bb]/30 dark:bg-[#2596bb]/15 dark:text-[#60c7e3]">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-accent-600/25 bg-accent-600/10 text-accent-600 dark:border-accent-400/30 dark:bg-accent-400/15 dark:text-accent-300">
               <MailCheck size={22} />
             </div>
             <h2 className="mb-1.5 text-lg font-semibold text-gray-800 dark:text-white/90">Check your inbox</h2>
@@ -119,7 +119,7 @@ export default function ForgotPasswordForm() {
         </form>
 
         <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-gray-200 bg-[#f9fafb] px-3.5 py-3 dark:border-stone-700 dark:bg-white/[.03]">
-          <Info size={16} className="mt-0.5 shrink-0 text-[#1a7b9b] dark:text-[#60c7e3]" />
+          <Info size={16} className="mt-0.5 shrink-0 text-accent-600 dark:text-accent-300" />
           <p className="text-[12.5px] text-gray-500 dark:text-stone-400">
             Be sure to check your spam folder if the email doesn&apos;t arrive shortly.
           </p>
